@@ -27,6 +27,7 @@ class ProcessoLinhaTempoService
     public const MARCOS = [
         'abertura' => ['titulo' => 'Processo aberto', 'curto' => 'Abertura', 'icone' => '📂'],
         'primeiro_envio' => ['titulo' => 'Empresa enviou os primeiros documentos', 'curto' => '1º envio da empresa', 'icone' => '📤'],
+        'todos_enviados' => ['titulo' => 'Empresa enviou todos os documentos obrigatórios', 'curto' => 'Todos os obrigatórios enviados', 'icone' => '📦'],
         'doc_completa' => ['titulo' => 'Documentação obrigatória completa (aprovada)', 'curto' => 'Documentação completa', 'icone' => '✅'],
         'alvara_provisorio' => ['titulo' => 'Alvará não definitivo emitido (provisório)', 'curto' => 'Alvará provisório', 'icone' => '📄'],
         'alvara' => ['titulo' => 'Alvará Sanitário definitivo emitido', 'curto' => 'Alvará definitivo', 'icone' => '🏅'],
@@ -41,7 +42,7 @@ class ProcessoLinhaTempoService
     {
         $agora = now();
         $documentos = ProcessoDocumento::where('processo_id', $processo->id)
-            ->get(['id', 'processo_id', 'tipo_usuario', 'created_at', 'updated_at', 'status_aprovacao', 'aprovado_em', 'tipo_documento_obrigatorio_id']);
+            ->get(['id', 'processo_id', 'tipo_usuario', 'created_at', 'updated_at', 'status_aprovacao', 'aprovado_em', 'tipo_documento_obrigatorio_id', 'documento_substituido_id', 'historico_rejeicao']);
         $eventos = ProcessoEvento::where('processo_id', $processo->id)
             ->whereIn('tipo_evento', self::EVENTOS_TRAMITACAO)
             ->orderBy('created_at')
@@ -53,6 +54,16 @@ class ProcessoLinhaTempoService
         $primeiroEnvio = $documentos->where('tipo_usuario', 'externo')->min('created_at');
         if ($primeiroEnvio) {
             $marcos['primeiro_envio'] = Carbon::parse($primeiroEnvio);
+        }
+
+        // ---- Documentos obrigatórios (tempo de envio e de aprovação de cada um) ----
+        $docsObrigatorios = $this->documentosObrigatorios($processo, $documentos, $marcos['abertura'], $agora);
+        $todosEnviadosEm = $docsObrigatorios && collect($docsObrigatorios)->every(fn ($d) => $d['primeiro_envio'])
+            ? collect($docsObrigatorios)->max('primeiro_envio')
+            : null;
+        // Só vira marco próprio quando é diferente do 1º envio (senão é o mesmo momento)
+        if ($todosEnviadosEm && (!isset($marcos['primeiro_envio']) || $todosEnviadosEm->greaterThan($marcos['primeiro_envio']))) {
+            $marcos['todos_enviados'] = $todosEnviadosEm->copy();
         }
 
         if ($this->documentacaoCompleta($processo)) {
@@ -93,6 +104,7 @@ class ProcessoLinhaTempoService
                 'de' => $chave,
                 'ate' => $proxima,
                 'titulo' => self::MARCOS[$chave]['curto'] . ' → ' . ($proxima ? self::MARCOS[$proxima]['curto'] : 'hoje'),
+                'descricao' => $this->descricaoEtapa($chave, $proxima),
                 'inicio' => $inicio,
                 'fim' => $termino,
                 'segundos' => max(0, $termino->getTimestamp() - $inicio->getTimestamp()),
@@ -127,12 +139,85 @@ class ProcessoLinhaTempoService
             'em_andamento' => !$arquivado,
             'segundos_total' => max(0, $fim->getTimestamp() - $marcos['abertura']->getTimestamp()),
             'segundos_parado' => (int) $processo->getTempoTotalParadoConsiderandoParadaAtual(),
+            'documentos' => $docsObrigatorios,
+            'todos_enviados_em' => $todosEnviadosEm,
             // Alvará só existe no licenciamento
             'faltando' => array_values(array_diff(
-                $processo->tipo === 'licenciamento' ? ['primeiro_envio', 'doc_completa', 'alvara'] : ['primeiro_envio', 'doc_completa'],
+                array_merge(
+                    ['primeiro_envio'],
+                    // "todos enviados" pode coincidir com o 1º envio (não vira marco), então só falta se ainda não aconteceu
+                    count($docsObrigatorios) > 1 && !$todosEnviadosEm ? ['todos_enviados'] : [],
+                    ['doc_completa'],
+                    $processo->tipo === 'licenciamento' ? ['alvara'] : []
+                ),
                 array_keys($marcos)
             )),
         ];
+    }
+
+    /**
+     * O que acontece em cada etapa (entre um marco e o próximo).
+     */
+    private function descricaoEtapa(string $de, ?string $ate): string
+    {
+        return match ($de) {
+            'abertura' => 'aguardando a empresa enviar os documentos',
+            'primeiro_envio' => $ate === 'todos_enviados'
+                ? 'empresa completando o envio dos documentos obrigatórios'
+                : 'envio, análise e correção dos documentos',
+            'todos_enviados' => 'análise da vigilância e correções da empresa',
+            'doc_completa' => 'análise técnica / inspeção da vigilância',
+            'alvara_provisorio' => 'funcionando com alvará provisório',
+            'alvara' => 'depois do alvará definitivo',
+            default => '',
+        };
+    }
+
+    /**
+     * Tempo de cada documento obrigatório do checklist: quando foi enviado pela 1ª vez, quantas vezes
+     * foi rejeitado, quando foi aprovado e há quanto tempo está parado na situação atual.
+     *
+     * Rejeições: histórico gravado no próprio documento (formato atual) + documentos antigos rejeitados
+     * que foram substituídos por um novo envio (formato antigo).
+     */
+    private function documentosObrigatorios(Processo $processo, Collection $documentos, Carbon $abertura, Carbon $agora): array
+    {
+        $checklist = $processo->getDocumentosObrigatoriosChecklist()->where('obrigatorio', true)->values();
+        if ($checklist->isEmpty()) {
+            return [];
+        }
+
+        $porTipo = $documentos
+            ->whereNotNull('tipo_documento_obrigatorio_id')
+            ->where('tipo_usuario', 'externo')
+            ->groupBy('tipo_documento_obrigatorio_id');
+
+        return $checklist->map(function ($item) use ($porTipo, $abertura, $agora) {
+            $envios = $porTipo->get($item['id'], collect());
+            $recente = $envios->sortByDesc('created_at')->first();
+            $primeiroEnvio = $envios->min('created_at');
+            $primeiroEnvio = $primeiroEnvio ? Carbon::parse($primeiroEnvio) : null;
+
+            $rejeicoes = $envios->sum(fn ($d) => count($d->historico_rejeicao ?? []))
+                + $envios->where('status_aprovacao', 'rejeitado')->filter(fn ($d) => $d->id !== $recente?->id)->count();
+
+            $status = $recente?->status_aprovacao;
+            $aprovadoEm = $status === 'aprovado' ? Carbon::parse($recente->aprovado_em ?? $recente->updated_at) : null;
+            // Pendente/rejeitado: a última alteração do documento é o (re)envio ou a rejeição
+            $desde = $recente && in_array($status, ['pendente', 'rejeitado'], true) ? Carbon::parse($recente->updated_at) : null;
+
+            return [
+                'nome' => $item['nome'],
+                'status' => $status,
+                'primeiro_envio' => $primeiroEnvio,
+                'aprovado_em' => $aprovadoEm,
+                'rejeicoes' => $rejeicoes,
+                'segundos_ate_envio' => $primeiroEnvio ? max(0, $primeiroEnvio->getTimestamp() - $abertura->getTimestamp()) : null,
+                'segundos_ate_aprovar' => $primeiroEnvio && $aprovadoEm ? max(0, $aprovadoEm->getTimestamp() - $primeiroEnvio->getTimestamp()) : null,
+                'segundos_na_situacao' => $desde ? max(0, $agora->getTimestamp() - $desde->getTimestamp()) : null,
+                'segundos_sem_envio' => !$primeiroEnvio ? max(0, $agora->getTimestamp() - $abertura->getTimestamp()) : null,
+            ];
+        })->all();
     }
 
     /**

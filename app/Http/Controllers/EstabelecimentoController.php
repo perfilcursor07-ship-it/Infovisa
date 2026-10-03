@@ -536,7 +536,9 @@ class EstabelecimentoController extends Controller
             ->whereIn('status', $statusAtivos)
             ->orderByDesc('created_at')
             ->limit(6)
-            ->get();
+            ->get()
+            // evita uma consulta por card ao resolver a competência (Estado/Município) de cada processo
+            ->each(fn ($processo) => $processo->setRelation('estabelecimento', $estabelecimento));
         $totalProcessosAtivos = $estabelecimento->processos()->whereIn('status', $statusAtivos)->count();
         $totalProcessos = $estabelecimento->processos()->count();
         
@@ -1352,6 +1354,12 @@ class EstabelecimentoController extends Controller
                 ->with('error', 'Este estabelecimento não usa definição manual de documentos obrigatórios. Habilite a opção no cadastro do município.');
         }
 
+        if (!$estabelecimento->podeGerenciarDocumentosManuais(auth('interno')->user())) {
+            return redirect()
+                ->route('admin.estabelecimentos.show', $estabelecimento->id)
+                ->with('error', 'Os documentos obrigatórios deste estabelecimento são definidos pela Vigilância Sanitária Municipal.');
+        }
+
         $query = \App\Models\TipoDocumentoObrigatorio::where('ativo', true);
 
         // Se o município possui listas de documentos vinculadas, restringe aos documentos dessas listas
@@ -1382,6 +1390,12 @@ class EstabelecimentoController extends Controller
             return redirect()
                 ->route('admin.estabelecimentos.show', $estabelecimento->id)
                 ->with('error', 'Este estabelecimento não usa definição manual de documentos obrigatórios.');
+        }
+
+        if (!$estabelecimento->podeGerenciarDocumentosManuais(auth('interno')->user())) {
+            return redirect()
+                ->route('admin.estabelecimentos.show', $estabelecimento->id)
+                ->with('error', 'Os documentos obrigatórios deste estabelecimento são definidos pela Vigilância Sanitária Municipal.');
         }
 
         $validated = $request->validate([

@@ -4,7 +4,7 @@
 
 @section('content')
 <div x-data="registroForm()" class="min-h-screen bg-slate-50 font-sans antialiased flex justify-center p-4 sm:p-8">
-    <div class="w-full max-w-xl my-auto">
+    <div class="w-full max-w-xl">
         {{-- Passo a passo --}}
         <ol class="mb-5 flex items-start">
             <template x-for="(etapa, i) in etapas" :key="i">

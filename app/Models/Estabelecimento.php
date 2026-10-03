@@ -60,6 +60,7 @@ class Estabelecimento extends Model
         'motivo_rejeicao_unidade_movel',
         'tipo_setor',
         'atividades_exercidas',
+        'atividades_declaradas',
         'respostas_questionario',
         'respostas_questionario2',
         'competencia_manual',
@@ -112,6 +113,7 @@ class Estabelecimento extends Model
         'opcao_pelo_simples' => 'boolean',
         'regime_tributario' => 'array',
         'atividades_exercidas' => 'array',
+        'atividades_declaradas' => 'array',
         'respostas_questionario' => 'array',
         'respostas_questionario2' => 'array',
         'is_unidade_movel' => 'boolean',
@@ -171,6 +173,25 @@ class Estabelecimento extends Model
             : Municipio::find($this->municipio_id);
 
         return (bool) ($municipio?->documentos_manuais);
+    }
+
+    /**
+     * Documentos obrigatórios definidos manualmente são responsabilidade da Vigilância Sanitária
+     * Municipal (gestor/técnico do município do estabelecimento). Estadual não gerencia.
+     */
+    public function podeGerenciarDocumentosManuais($usuario): bool
+    {
+        if (!$usuario || !$this->usaDocumentosManuais()) {
+            return false;
+        }
+
+        if ($usuario->isAdmin()) {
+            return true;
+        }
+
+        return $usuario->isMunicipal()
+            && $usuario->municipio_id
+            && (int) $usuario->municipio_id === (int) $this->municipio_id;
     }
 
     /**
@@ -1150,6 +1171,67 @@ class Estabelecimento extends Model
     public function possuiAtividadeEspecial(string $codigo): bool
     {
         return in_array($codigo, $this->getAtividadesEspeciais(), true);
+    }
+
+    /**
+     * Cadastro feito "por enquanto, só Projeto/Rotulagem" que guardou as atividades reais
+     * para quando o Licenciamento for aberto.
+     */
+    public function possuiAtividadesDeclaradasPendentes(): bool
+    {
+        return !empty($this->atividades_declaradas) && $this->possuiSomenteAtividadesEspeciais();
+    }
+
+    /**
+     * Atividades que valerão quando o Licenciamento for aberto: as declaradas + as especiais atuais.
+     */
+    public function getAtividadesComDeclaradas(): array
+    {
+        return array_values(array_merge(
+            $this->atividades_declaradas ?? [],
+            $this->atividades_exercidas ?? []
+        ));
+    }
+
+    /**
+     * Cópia em memória (não salva) do estabelecimento como ficará após abrir o Licenciamento,
+     * usada para calcular competência e documentos antes de efetivar a mudança.
+     */
+    public function comoFicaraComLicenciamento(): self
+    {
+        $copia = clone $this;
+        $copia->atividades_exercidas = $this->getAtividadesComDeclaradas();
+        $copia->atividades_declaradas = null;
+
+        return $copia;
+    }
+
+    /**
+     * Mensagem de bloqueio para abrir o Licenciamento com as atividades declaradas, ou null se pode abrir.
+     * Regra: competência municipal exige que o município utilize o InfoVISA.
+     */
+    public function bloqueioLicenciamentoComDeclaradas(): ?string
+    {
+        if (!$this->possuiAtividadesDeclaradasPendentes()) {
+            return null;
+        }
+
+        $futuro = $this->comoFicaraComLicenciamento();
+
+        if ($futuro->isCompetenciaEstadual()) {
+            return null;
+        }
+
+        $municipio = $this->municipio_id ? Municipio::find($this->municipio_id) : null;
+
+        if ($municipio && $municipio->usa_infovisa) {
+            return null;
+        }
+
+        $nome = $municipio->nome ?? $this->municipio ?? $this->cidade ?? 'seu município';
+
+        return "O Licenciamento deste estabelecimento é de competência municipal e a Vigilância Sanitária Municipal de {$nome} "
+            . 'ainda não utiliza o InfoVISA. Para o Licenciamento, entre em contato com a Vigilância Sanitária Municipal.';
     }
 
     public function possuiSomenteAtividadesEspeciais(): bool

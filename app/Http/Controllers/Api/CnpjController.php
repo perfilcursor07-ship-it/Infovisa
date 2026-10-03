@@ -344,13 +344,21 @@ class CnpjController extends Controller
                 $competenciaFinal = 'estadual';
             }
             
+            // Adesão do município ao InfoVISA (somente leitura; null quando o município não é encontrado)
+            $usaInfovisa = null;
+            if ($municipio) {
+                $municipioModel = \App\Models\Municipio::where('slug', \Illuminate\Support\Str::slug($municipio))->first();
+                $usaInfovisa = $municipioModel ? (bool) $municipioModel->usa_infovisa : null;
+            }
+
             $resultado = [
                 'competencia' => $competenciaFinal,
                 'risco' => $riscoMaisAlto,
                 'atividades_verificadas' => count($atividades),
                 'detalhes' => $atividadesVerificadas,
                 'municipio' => $municipio,
-                'tem_atividade_nao_sujeita_visa' => $temAtividadeNaoSujeitaVisa
+                'tem_atividade_nao_sujeita_visa' => $temAtividadeNaoSujeitaVisa,
+                'usa_infovisa' => $usaInfovisa,
             ];
             
             \Log::info('=== RESULTADO FINAL ===', $resultado);

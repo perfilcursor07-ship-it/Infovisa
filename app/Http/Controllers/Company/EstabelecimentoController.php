@@ -432,6 +432,18 @@ class EstabelecimentoController extends Controller
             }
         }
         
+        // Pessoa Jurídica sempre informa as atividades exercidas, mesmo que vá abrir apenas
+        // Projeto Arquitetônico/Análise de Rotulagem: o tipo de processo é escolhido depois
+        // e cada um tem sua competência definida pela pactuação.
+        if ($request->tipo_pessoa === 'juridica' && !$isUnidadeMovel) {
+            $atividadesPj = json_decode($request->input('atividades_exercidas', '[]'), true);
+            if (empty($atividadesPj) || !is_array($atividadesPj)) {
+                return back()->withErrors([
+                    'atividades_exercidas' => 'Você deve selecionar pelo menos uma Atividade Econômica (CNAE) exercida pelo estabelecimento.'
+                ])->withInput();
+            }
+        }
+
         // Limpa formatação do CNPJ/CPF antes de verificar unicidade
         if ($request->tipo_pessoa === 'juridica') {
             $cnpjLimpo = preg_replace('/\D/', '', $validated['cnpj']);
@@ -545,7 +557,7 @@ class EstabelecimentoController extends Controller
         // PROCESSAMENTO: Atividades Especiais (Projeto Arquitetônico / Análise de Rotulagem)
         // ========================================
         $apenasAtividadesEspeciais = $request->input('apenas_atividades_especiais') === '1';
-        
+
         if ($apenasAtividadesEspeciais) {
             $atividadesEspeciais = [];
             
@@ -572,7 +584,13 @@ class EstabelecimentoController extends Controller
                 ])->withInput();
             }
             
-            // Substitui as atividades exercidas pelas atividades especiais
+            // Pessoa Jurídica: guarda as atividades reais para quando abrir o Licenciamento
+            // (a competência delas é verificada pela pactuação na abertura do processo)
+            if ($request->tipo_pessoa === 'juridica') {
+                $validated['atividades_declaradas'] = $validated['atividades_exercidas'] ?? [];
+            }
+
+            // Substitui as atividades exercidas pelas atividades especiais (cadastro analisado pelo Estado)
             $validated['atividades_exercidas'] = $atividadesEspeciais;
             
             Log::info('Cadastro com atividades especiais:', [
@@ -1448,22 +1466,40 @@ class EstabelecimentoController extends Controller
         }
         // ========================================
 
+        // ========================================
+        // CADASTRO "SÓ PROJETO/ROTULAGEM" COM ATIVIDADES GUARDADAS
+        // ========================================
+        // Os demais processos (ex.: Licenciamento) usam as atividades declaradas no cadastro.
+        // Se a competência for municipal e o município não usar o InfoVISA, ficam indisponíveis com aviso.
+        $temDeclaradasPendentes = $estabelecimento->possuiAtividadesDeclaradasPendentes();
+        $estabelecimentoComLicenciamento = $temDeclaradasPendentes ? $estabelecimento->comoFicaraComLicenciamento() : $estabelecimento;
+        $avisoLicenciamentoIndisponivel = $estabelecimento->bloqueioLicenciamentoComDeclaradas();
+        $liberarDemaisProcessos = $temDeclaradasPendentes && !$avisoLicenciamentoIndisponivel;
+        if ($liberarDemaisProcessos) {
+            $equipamentosInfo['exige'] = $equipamentosInfo['exige']
+                || \App\Models\AtividadeEquipamentoRadiacao::estabelecimentoExigeEquipamentos($estabelecimentoComLicenciamento);
+        }
+        // ========================================
+
         // Busca tipos de processo disponíveis para usuários externos
         $tiposProcessoBase = \App\Models\TipoProcesso::where('ativo', true)
             ->where('usuario_externo_pode_abrir', true)
             ->orderBy('ordem')
             ->orderBy('nome')
             ->get()
-            ->filter(fn ($tipo) => $tipo->disponivelParaEstabelecimento($estabelecimento))
+            ->filter(fn ($tipo) => $tipo->disponivelParaEstabelecimento(
+                $liberarDemaisProcessos && !$tipo->isProcessoEspecial() ? $estabelecimentoComLicenciamento : $estabelecimento
+            ))
             ->values();
 
         // Filtra tipos de processo baseado nas regras de anual/único E atividades especiais
         $anoAtual = date('Y');
-        $tiposProcesso = $tiposProcessoBase->filter(function($tipo) use ($estabelecimento, $anoAtual, $apenasAtividadesEspeciais, $atividadesEspeciaisCodigos, $equipamentosInfo) {
+        $tiposProcesso = $tiposProcessoBase->filter(function($tipo) use ($estabelecimento, $anoAtual, $apenasAtividadesEspeciais, $atividadesEspeciaisCodigos, $equipamentosInfo, $liberarDemaisProcessos) {
             // ========================================
             // FILTRO POR ATIVIDADES ESPECIAIS
             // ========================================
-            if ($apenasAtividadesEspeciais) {
+            // (não se aplica aos demais processos quando há atividades declaradas liberadas)
+            if ($apenasAtividadesEspeciais && !($liberarDemaisProcessos && !$tipo->isProcessoEspecial())) {
                 // Se tem apenas atividades especiais, só pode abrir processos vinculados a elas
                 $codigosPermitidos = [];
                 
@@ -1515,7 +1551,14 @@ class EstabelecimentoController extends Controller
         });
 
         // Busca documentos obrigatórios baseados nas atividades exercidas
-        $documentosObrigatorios = $this->buscarDocumentosObrigatorios($estabelecimento, $tiposProcesso);
+        // (com atividades declaradas: Projeto/Rotulagem pelo cadastro atual, demais pelas atividades declaradas)
+        if ($liberarDemaisProcessos) {
+            [$tiposEspeciais, $tiposDemais] = $tiposProcesso->partition(fn ($tipo) => $tipo->isProcessoEspecial());
+            $documentosObrigatorios = $this->buscarDocumentosObrigatorios($estabelecimento, $tiposEspeciais)
+                + $this->buscarDocumentosObrigatorios($estabelecimentoComLicenciamento, $tiposDemais);
+        } else {
+            $documentosObrigatorios = $this->buscarDocumentosObrigatorios($estabelecimento, $tiposProcesso);
+        }
         
         // Busca tipos bloqueados para mostrar mensagem informativa
         $tiposBloqueados = $tiposProcessoBase->filter(function($tipo) use ($estabelecimento, $anoAtual) {
@@ -1541,7 +1584,8 @@ class EstabelecimentoController extends Controller
         if ($equipamentosInfo['exige'] && !$equipamentosInfo['ok']) {
             // Verifica quais tipos de processo exigem equipamentos para este estabelecimento
             foreach ($tiposProcesso as $tipo) {
-                if (\App\Models\AtividadeEquipamentoRadiacao::estabelecimentoExigeEquipamentosParaProcesso($estabelecimento, $tipo->codigo)) {
+                $estabelecimentoRegra = $liberarDemaisProcessos && !$tipo->isProcessoEspecial() ? $estabelecimentoComLicenciamento : $estabelecimento;
+                if (\App\Models\AtividadeEquipamentoRadiacao::estabelecimentoExigeEquipamentosParaProcesso($estabelecimentoRegra, $tipo->codigo)) {
                     $tiposBloqueadosPorEquipamentos[] = $tipo->codigo;
                 }
             }
@@ -1554,7 +1598,8 @@ class EstabelecimentoController extends Controller
             'documentosObrigatorios', 
             'tiposBloqueados',
             'tiposBloqueadosPorEquipamentos',
-            'precisaCadastrarResponsavelTecnico'
+            'precisaCadastrarResponsavelTecnico',
+            'avisoLicenciamentoIndisponivel'
         ));
     }
 
@@ -1823,7 +1868,25 @@ class EstabelecimentoController extends Controller
             ->where('usuario_externo_pode_abrir', true)
             ->firstOrFail();
 
-        if (!$tipoProcesso->disponivelParaEstabelecimento($estabelecimento)) {
+        // Cadastro "só Projeto/Rotulagem" abrindo outro processo (ex.: Licenciamento): passa a usar as
+        // atividades declaradas no cadastro. Competência municipal exige município com InfoVISA.
+        $ativarAtividadesDeclaradas = !$tipoProcesso->isProcessoEspecial()
+            && $estabelecimento->possuiAtividadesDeclaradasPendentes();
+
+        if ($ativarAtividadesDeclaradas) {
+            if ($mensagemBloqueio = $estabelecimento->bloqueioLicenciamentoComDeclaradas()) {
+                return back()->withErrors(['tipo_processo_id' => $mensagemBloqueio])->withInput();
+            }
+
+            if ($estabelecimento->comoFicaraComLicenciamento()->precisaCadastrarResponsavelTecnicoPorAtividade()) {
+                return redirect()->route('company.estabelecimentos.responsaveis.index', $estabelecimento->id)
+                    ->with('error', 'Para abrir o processo de ' . $tipoProcesso->nome . ', este estabelecimento precisa ter pelo menos um Responsável Técnico cadastrado.');
+            }
+        }
+
+        $estabelecimentoRegras = $ativarAtividadesDeclaradas ? $estabelecimento->comoFicaraComLicenciamento() : $estabelecimento;
+
+        if (!$tipoProcesso->disponivelParaEstabelecimento($estabelecimentoRegras)) {
             return back()->withErrors([
                 'tipo_processo_id' => 'O tipo de processo selecionado não está disponível para este estabelecimento.',
             ])->withInput();
@@ -1859,7 +1922,7 @@ class EstabelecimentoController extends Controller
         }
 
         // Validação de equipamentos de radiação obrigatórios
-        if (\App\Models\AtividadeEquipamentoRadiacao::estabelecimentoExigeEquipamentosParaProcesso($estabelecimento, $tipoProcesso->codigo)) {
+        if (\App\Models\AtividadeEquipamentoRadiacao::estabelecimentoExigeEquipamentosParaProcesso($estabelecimentoRegras, $tipoProcesso->codigo)) {
             $temEquipamentos = \App\Models\EquipamentoRadiacao::where('estabelecimento_id', $estabelecimento->id)->exists();
             $declarouSemEquipamentos = (bool) $estabelecimento->declaracao_sem_equipamentos_imagem;
             
@@ -1871,7 +1934,16 @@ class EstabelecimentoController extends Controller
         }
 
         try {
-            $processo = \DB::transaction(function () use ($estabelecimento, $tipoProcesso, $validated, $request) {
+            $processo = \DB::transaction(function () use ($estabelecimento, $tipoProcesso, $validated, $request, $ativarAtividadesDeclaradas) {
+                // Efetiva as atividades declaradas no cadastro: a partir daqui a competência do
+                // estabelecimento segue a pactuação dessas atividades (sem nova aprovação do cadastro).
+                if ($ativarAtividadesDeclaradas) {
+                    $estabelecimento->update([
+                        'atividades_exercidas' => $estabelecimento->getAtividadesComDeclaradas(),
+                        'atividades_declaradas' => null,
+                    ]);
+                }
+
                 // Gera número do processo usando o método do model (dentro da transaction)
                 $ano = date('Y');
                 $dadosNumero = \App\Models\Processo::gerarNumeroProcesso($ano);

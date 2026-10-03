@@ -22,20 +22,20 @@
         $horaAtualExt = (int) now()->format('H');
         $saudacaoExt = $horaAtualExt < 12 ? 'Bom dia' : ($horaAtualExt < 18 ? 'Boa tarde' : 'Boa noite');
     @endphp
-    <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/20">
-        <div class="pointer-events-none absolute -top-16 -right-16 w-64 h-64 rounded-full bg-white/10 blur-2xl"></div>
-        <div class="pointer-events-none absolute -bottom-20 right-40 w-56 h-56 rounded-full bg-fuchsia-400/20 blur-3xl"></div>
-        <div class="relative flex flex-col md:flex-row md:items-center gap-4 p-5 sm:p-6">
-            <div class="flex items-center gap-4 flex-1 min-w-0">
-                <div class="hidden sm:flex w-14 h-14 rounded-2xl bg-white/15 ring-1 ring-white/25 items-center justify-center flex-shrink-0">
-                    <span class="text-2xl">🏢</span>
+    <div class="relative overflow-hidden rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-500/15">
+        <div class="pointer-events-none absolute -top-16 -right-16 w-52 h-52 rounded-full bg-white/10 blur-2xl"></div>
+        <div class="pointer-events-none absolute -bottom-20 right-40 w-44 h-44 rounded-full bg-fuchsia-400/20 blur-3xl"></div>
+        <div class="relative flex flex-col md:flex-row md:items-center gap-3 p-4">
+            <div class="flex items-center gap-3 flex-1 min-w-0">
+                <div class="hidden sm:flex w-11 h-11 rounded-xl bg-white/15 ring-1 ring-white/25 items-center justify-center flex-shrink-0">
+                    <span class="text-xl">🏢</span>
                 </div>
                 <div class="min-w-0">
                     <p class="text-xs font-medium text-white/70">{{ ucfirst(now()->locale('pt_BR')->isoFormat('dddd, D [de] MMMM')) }}</p>
-                    <h1 class="text-xl sm:text-2xl font-bold tracking-tight truncate">{{ $saudacaoExt }}, {{ explode(' ', auth('externo')->user()->nome)[0] }}! 👋</h1>
-                    <p class="text-sm text-white/80 mt-0.5">
+                    <h1 class="text-lg sm:text-xl font-bold tracking-tight truncate">{{ $saudacaoExt }}, {{ explode(' ', auth('externo')->user()->nome)[0] }}! 👋</h1>
+                    <p class="text-xs sm:text-sm text-white/80 mt-0.5">
                         @if($totalAlertas > 0)
-                            Você tem <span class="font-semibold text-white">{{ $totalAlertas }} {{ $totalAlertas == 1 ? 'pendência' : 'pendências' }}</span> que precisam da sua atenção.
+                            Você tem <span class="font-semibold text-white">{{ $totalAlertas }} {{ $totalAlertas == 1 ? 'pendência' : 'pendências' }}</span> que {{ $totalAlertas == 1 ? 'precisa' : 'precisam' }} da sua atenção.
                         @else
                             Tudo em dia por aqui. Nenhuma pendência no momento. ✨
                         @endif
@@ -44,9 +44,9 @@
             </div>
             @if($totalAlertas > 0)
             <a href="{{ route('company.alertas.index') }}"
-               class="flex-shrink-0 self-start md:self-auto inline-flex items-center gap-2 px-4 py-2.5 bg-white text-indigo-700 text-sm font-semibold rounded-xl shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all">
+               class="flex-shrink-0 self-start md:self-auto inline-flex items-center gap-1.5 px-3 py-2 bg-white text-indigo-700 text-xs font-semibold rounded-lg shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all">
                 Ver pendências
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
             </a>
             @endif
         </div>

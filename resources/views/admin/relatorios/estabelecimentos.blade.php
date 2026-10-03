@@ -118,17 +118,17 @@
                 </button>
             </div>
 
-            <div class="flex items-center gap-2 flex-shrink-0 overflow-x-auto">
-                <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Processo exigido</span>
-                <div class="inline-flex p-1 bg-slate-100 rounded-xl">
-                    <label class="{{ $segmento }}">
-                        <input type="radio" name="tipo" value="" class="sr-only" @checked(!$filtros['tipo'])>Todos
-                    </label>
-                    @foreach($tipos as $codigo => $tipo)
-                        <label class="{{ $segmento }} whitespace-nowrap">
-                            <input type="radio" name="tipo" value="{{ $codigo }}" class="sr-only" @checked($filtros['tipo'] === $codigo)>{{ $tipo->nome }}
-                        </label>
-                    @endforeach
+            <div class="flex items-center gap-2 flex-shrink-0 lg:w-80">
+                <label for="filtro-tipo" class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Processo exigido</label>
+                <div class="relative flex-1">
+                    <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    <select id="filtro-tipo" name="tipo"
+                            class="w-full pl-9 pr-8 py-2.5 text-sm font-medium rounded-xl border transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500 {{ $filtros['tipo'] ? 'bg-blue-50 border-blue-300 text-blue-800' : 'bg-slate-50 border-slate-200 text-slate-700' }}">
+                        <option value="">Todos os processos</option>
+                        @foreach($tipos as $codigo => $tipo)
+                            <option value="{{ $codigo }}" @selected($filtros['tipo'] === $codigo)>{{ $tipo->nome }}</option>
+                        @endforeach
+                    </select>
                 </div>
             </div>
         </div>
@@ -275,9 +275,11 @@
                 @endif
             </p>
             @if($indicadores['media_dias_alvara'] !== null)
-                <p class="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-100/70 text-[11px] font-semibold text-emerald-800">
-                    ⏱ média de {{ $fmt($indicadores['media_dias_alvara']) }} {{ $indicadores['media_dias_alvara'] === 1 ? 'dia' : 'dias' }} até o definitivo
+                <p class="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-100/70 text-[11px] font-semibold text-emerald-800"
+                   title="Mediana: metade dos alvarás saiu em até este número de dias. Média: {{ $fmt($indicadores['media_dias_alvara']) }} dias">
+                    ⏱ {{ $fmt($indicadores['mediana_dias_alvara']) }} {{ $indicadores['mediana_dias_alvara'] === 1 ? 'dia' : 'dias' }} até o definitivo (mediana)
                 </p>
+                <p class="mt-1 text-[10px] text-slate-500">média de {{ $fmt($indicadores['media_dias_alvara']) }} dias</p>
             @endif
             @if(($indicadores['alvara_doc_incompleta'] ?? 0) > 0)
                 <p class="mt-1.5 text-[11px] font-semibold text-amber-700">
@@ -446,18 +448,124 @@
         $cabecalhoGrafico = fn ($icone, $classe, $titulo, $subtitulo) =>
             '<div class="flex items-start gap-3 mb-4">'
             . '<span class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ' . $classe . '"><svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="' . $icone . '"/></svg></span>'
-            . '<div><h3 class="text-sm font-semibold text-slate-900">' . e($titulo) . '</h3><p class="text-[11px] text-slate-500">' . e($subtitulo) . '</p></div></div>';
+            . '<div class="min-w-0"><h3 class="text-sm font-semibold text-slate-900">' . e($titulo) . '</h3><p class="text-[11px] text-slate-500">' . e($subtitulo) . '</p></div></div>';
+        $diasTxt = fn ($v) => $v === null ? '—' : (fmod((float) $v, 1.0) === 0.0 ? number_format($v, 0, ',', '.') : number_format($v, 1, ',', '.')) . ' ' . ((float) $v === 1.0 ? 'dia' : 'dias');
+        $cartao = 'bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5';
     @endphp
+
+    {{-- Andamento do processo escolhido: funil, tempo por etapa e etapa por competência --}}
+    @if($tipoFoco && $graficos['funil'])
+    @php
+        $funil = $graficos['funil'];
+        $baseFunil = max(1, $funil[0]['total']);
+        // Rampa ordinal (um tom de azul, do claro ao escuro) — validada para contraste e daltonismo
+        $rampaFunil = ['#86b6ef', '#5598e7', '#2a78d6', '#1c5cab', '#0d366b'];
+        $tempos = $graficos['tempos_etapas'];
+        $maiorMediana = max(1, collect($tempos)->max('mediana') ?? 1);
+        $nomeTipoFoco = $tipos[$tipoFoco]->nome ?? '';
+    @endphp
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        {{-- Funil --}}
+        <div class="{{ $cartao }}">
+            {!! $cabecalhoGrafico('M3 4h18l-7 8v6l-4 2v-8L3 4z', 'bg-blue-50 text-blue-600', 'Funil · ' . $nomeTipoFoco . ($tipos[$tipoFoco]->anual ? ' ' . $indicadores['ano'] : ''), 'Quantos estabelecimentos chegaram a cada etapa') !!}
+            <ol class="space-y-2.5">
+                @foreach($funil as $i => $etapaFunil)
+                    @php
+                        $largura = $etapaFunil['total'] * 100 / $baseFunil;
+                        $percTotal = $funil[0]['total'] > 0 ? round($etapaFunil['total'] * 100 / $funil[0]['total']) : 0;
+                        $anterior = $i > 0 ? $funil[$i - 1]['total'] : null;
+                        $perdeu = $anterior !== null ? $anterior - $etapaFunil['total'] : 0;
+                    @endphp
+                    <li title="{{ $etapaFunil['rotulo'] }}: {{ $fmt($etapaFunil['total']) }} ({{ $percTotal }}% dos que precisam){{ $perdeu > 0 ? ' · ' . $fmt($perdeu) . ' pararam na etapa anterior' : '' }}">
+                        <div class="flex items-baseline justify-between gap-3 text-xs mb-1">
+                            <span class="font-medium text-slate-700">{{ $etapaFunil['rotulo'] }}</span>
+                            <span class="whitespace-nowrap">
+                                <strong class="text-slate-900 tabular-nums">{{ $fmt($etapaFunil['total']) }}</strong>
+                                <span class="text-slate-400 tabular-nums">· {{ $percTotal }}%</span>
+                            </span>
+                        </div>
+                        <div class="h-3 rounded bg-slate-100 overflow-hidden">
+                            <div class="h-full rounded transition-all" style="width: {{ max($largura, $etapaFunil['total'] > 0 ? 1.5 : 0) }}%; background: {{ $rampaFunil[$i] ?? end($rampaFunil) }}"></div>
+                        </div>
+                        @if($perdeu > 0)
+                            <p class="mt-0.5 text-[10px] text-slate-400">↳ {{ $fmt($perdeu) }} {{ $perdeu === 1 ? 'parou' : 'pararam' }} antes desta etapa</p>
+                        @endif
+                    </li>
+                @endforeach
+            </ol>
+            @if(($graficos['sem_checklist'] ?? 0) > 0)
+                <p class="mt-4 flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-50 text-[11px] text-amber-900 leading-relaxed">
+                    <span aria-hidden="true">⚠</span>
+                    <span>
+                        <strong>{{ $fmt($graficos['sem_checklist']) }} {{ $graficos['sem_checklist'] === 1 ? 'processo aberto não tem' : 'processos abertos não têm' }} nenhum documento obrigatório configurado</strong>
+                        para as atividades do estabelecimento. No funil {{ $graficos['sem_checklist'] === 1 ? 'ele não conta' : 'eles não contam' }} como "documentação completa";
+                        na lista abaixo {{ $graficos['sem_checklist'] === 1 ? 'aparece' : 'aparecem' }} como "Doc. completa", como na tela de Processos. Configure as listas de documentos dessas atividades.
+                    </span>
+                </p>
+            @endif
+        </div>
+
+        {{-- Tempo por etapa --}}
+        <div class="{{ $cartao }}">
+            {!! $cabecalhoGrafico('M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', 'bg-violet-50 text-violet-600', 'Quanto tempo leva cada etapa', 'Mediana em dias: metade dos processos levou até esse tempo') !!}
+            <ul class="space-y-3.5">
+                @foreach($tempos as $t)
+                    <li title="{{ $t['rotulo'] }} · mediana {{ $diasTxt($t['mediana']) }} · média {{ $diasTxt($t['media']) }} · maior {{ $diasTxt($t['maximo']) }} · {{ $fmt($t['n']) }} processo(s)">
+                        <div class="flex items-baseline justify-between gap-3 text-xs mb-1">
+                            <span class="min-w-0 truncate {{ !empty($t['total']) ? 'font-semibold text-slate-900' : 'font-medium text-slate-700' }}">{{ $t['rotulo'] }}</span>
+                            <strong class="whitespace-nowrap text-slate-900 tabular-nums">{{ $diasTxt($t['mediana']) }}</strong>
+                        </div>
+                        <div class="h-2.5 rounded bg-slate-100 overflow-hidden">
+                            @if($t['mediana'] !== null)
+                            <div class="h-full rounded" style="width: {{ max($t['mediana'] * 100 / $maiorMediana, 1.5) }}%; background: {{ !empty($t['total']) ? '#4a3aa7' : '#8b80dc' }}"></div>
+                            @endif
+                        </div>
+                        <p class="mt-0.5 text-[10px] text-slate-400">
+                            @if($t['n'] > 0)
+                                média {{ $diasTxt($t['media']) }} · maior {{ $diasTxt($t['maximo']) }} · {{ $fmt($t['n']) }} {{ $t['n'] === 1 ? 'processo' : 'processos' }}
+                            @else
+                                nenhum processo chegou a esta etapa ainda
+                            @endif
+                            <span class="ml-1 px-1 rounded bg-slate-100 text-slate-500">{{ $t['quem'] }}</span>
+                        </p>
+                    </li>
+                @endforeach
+            </ul>
+        </div>
+
+        {{-- Etapa por competência --}}
+        <div class="{{ $cartao }} {{ $graficos['faixas_alvara'] ? '' : 'xl:col-span-2' }}">
+            {!! $cabecalhoGrafico('M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3', 'bg-emerald-50 text-emerald-600', 'Em que etapa estão · por competência', 'Competência do processo de ' . $nomeTipoFoco) !!}
+            <div class="h-44"><canvas id="chartEtapas"></canvas></div>
+        </div>
+
+        @if($graficos['faixas_alvara'])
+        <div class="{{ $cartao }}">
+            {!! $cabecalhoGrafico('M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z', 'bg-emerald-50 text-emerald-600', 'Tempo até o alvará definitivo', $fmt($indicadores['alvara_definitivo']) . ' alvarás definitivos · da abertura do processo à emissão') !!}
+            <div class="h-44 relative">
+                @if(array_sum($graficos['faixas_alvara']) === 0)
+                    <div class="absolute inset-0 flex items-center justify-center text-xs text-slate-400">Nenhum alvará definitivo emitido neste recorte</div>
+                @else
+                    <canvas id="chartFaixasAlvara"></canvas>
+                @endif
+            </div>
+        </div>
+        @endif
+    </div>
+    @endif
+
     <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <div class="xl:col-span-2 bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5">
-            {!! $cabecalhoGrafico('M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z', 'bg-blue-50 text-blue-600', 'Processos abertos por mês · ' . $indicadores['ano'], 'Pela competência do estabelecimento') !!}
+        <div class="xl:col-span-2 {{ $cartao }}">
+            {!! $cabecalhoGrafico('M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z', 'bg-blue-50 text-blue-600',
+                $tipoFoco === 'licenciamento' ? 'Processos abertos e alvarás emitidos por mês · ' . $indicadores['ano'] : 'Processos abertos por mês · ' . $indicadores['ano'],
+                $tipoFoco === 'licenciamento' ? 'Licenciamentos abertos x alvarás definitivos emitidos' : ($tipoFoco ? 'Somente ' . ($tipos[$tipoFoco]->nome ?? '') . ', pela competência do processo' : 'Licenciamento, Projeto e Rotulagem, pela competência do estabelecimento')) !!}
             <div class="h-64"><canvas id="chartAberturas"></canvas></div>
         </div>
-        <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5">
-            {!! $cabecalhoGrafico('M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3', 'bg-emerald-50 text-emerald-600', 'Estadual x municipal', 'Em dia, pendentes e sem exigência') !!}
+        <div class="{{ $cartao }}">
+            {!! $cabecalhoGrafico('M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3', 'bg-emerald-50 text-emerald-600', 'Estadual x municipal', 'Abriram, precisam abrir e sem exigência') !!}
             <div class="h-64"><canvas id="chartCompetencia"></canvas></div>
         </div>
-        <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5">
+        <div class="{{ $cartao }}">
             {!! $cabecalhoGrafico('M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z', 'bg-violet-50 text-violet-600', 'Processos ativos por tipo', $fmt($indicadores['processos_ativos']) . ' em tramitação') !!}
             <div class="h-60 relative">
                 @if($graficos['ativos_por_tipo']->isEmpty())
@@ -467,17 +575,17 @@
                 @endif
             </div>
         </div>
-        <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5">
+        <div class="{{ $cartao }}">
             {!! $cabecalhoGrafico('M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', 'bg-amber-50 text-amber-600', 'Há quanto tempo estão abertos', 'Idade dos processos ativos') !!}
             <div class="h-60"><canvas id="chartIdade"></canvas></div>
         </div>
         @if($graficos['top_municipios']->isNotEmpty())
-        <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5">
+        <div class="{{ $cartao }}">
             {!! $cabecalhoGrafico('M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z M15 11a3 3 0 11-6 0 3 3 0 016 0z', 'bg-red-50 text-red-600', 'Municípios com mais pendências', 'Estabelecimentos que precisam abrir processo') !!}
             <div class="h-60"><canvas id="chartMunicipios"></canvas></div>
         </div>
         @else
-        <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5">
+        <div class="{{ $cartao }}">
             {!! $cabecalhoGrafico('M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z', 'bg-slate-100 text-slate-600', 'Abertura por tipo exigido', 'Abriram x não abriram') !!}
             <div class="h-60"><canvas id="chartCobertura"></canvas></div>
         </div>
@@ -708,22 +816,38 @@
     Chart.defaults.font.family = "'Inter','Segoe UI',system-ui,sans-serif";
     Chart.defaults.font.size = 11;
     Chart.defaults.color = '#64748b';
-    Chart.defaults.plugins.legend.labels.usePointStyle = true;
-    Chart.defaults.plugins.legend.labels.pointStyle = 'circle';
-    Chart.defaults.plugins.legend.labels.boxWidth = 7;
-    Chart.defaults.plugins.legend.labels.padding = 14;
+    Object.assign(Chart.defaults.plugins.legend.labels, { usePointStyle: true, pointStyle: 'rectRounded', boxWidth: 8, boxHeight: 8, padding: 14, color: '#334155' });
     Object.assign(Chart.defaults.plugins.tooltip, {
-        backgroundColor: '#0f172a', titleColor: '#fff', bodyColor: '#e2e8f0',
-        padding: 10, cornerRadius: 8, boxPadding: 4, usePointStyle: true,
+        backgroundColor: '#0f172a', titleColor: '#fff', bodyColor: '#e2e8f0', footerColor: '#94a3b8',
+        padding: 10, cornerRadius: 8, boxPadding: 4, usePointStyle: true, titleFont: { weight: '600' },
     });
-    Chart.defaults.animation.duration = 500;
+    Chart.defaults.animation.duration = 450;
 
-    const cores = { estadual: '#3b82f6', municipal: '#10b981', emDia: '#10b981', pendente: '#f87171', neutro: '#e2e8f0' };
-    const grid = { color: '#f1f5f9', drawTicks: false };
+    // Paleta validada (contraste + daltonismo). Cada cor tem um significado fixo em toda a página.
+    const cor = {
+        estadual: '#2a78d6',   // azul
+        municipal: '#1baf7a',  // verde-água
+        abertos: '#4a3aa7',    // violeta (volume de processos)
+        bom: '#0ca30c',        // status: abriu / alvará
+        critico: '#d03b3b',    // status: não abriu / pendente
+        atencao: '#eda100',    // status: documentação incompleta
+        neutro: '#cbd5e1',
+        rampa: ['#86b6ef', '#3987e5', '#1c5cab', '#0d366b'], // ordinal (idade)
+        rampaVerde: ['#5cc85d', '#1fa520', '#0e840e', '#076407', '#044404'], // ordinal (tempo até o alvará)
+        tipos: { 'Licenciamento': '#2a78d6', 'Projeto Arquitetônico': '#eb6834', 'Análise de Rotulagem': '#1baf7a' },
+        extras: ['#eda100', '#e87ba4', '#008300', '#4a3aa7'],
+    };
+    const etapaCor = { nao_abriu: cor.critico, doc_incompleta: cor.atencao, doc_completa: cor.abertos, com_alvara: cor.bom };
+
+    const grade = { color: '#eef2f6', drawTicks: false };
     const semBorda = { display: false };
     const graficos = @json($graficos);
     const el = id => document.getElementById(id);
     const soma = arr => arr.reduce((a, b) => a + (Number(b) || 0), 0);
+    const num = n => Number(n || 0).toLocaleString('pt-BR');
+    const pct = (parte, todo) => todo > 0 ? Math.round(parte * 100 / todo) + '%' : '0%';
+    // Barras finas com cantos de 4px e 2px de separação (cor da superfície) entre segmentos
+    const barra = (extra = {}) => ({ borderRadius: 4, borderSkipped: false, borderColor: '#fff', borderWidth: 2, maxBarThickness: 28, ...extra });
 
     // Total no centro da rosca
     const totalNoCentro = {
@@ -732,124 +856,202 @@
             if (chart.config.type !== 'doughnut') return;
             const { ctx, chartArea: { left, right, top, bottom } } = chart;
             const x = (left + right) / 2, y = (top + bottom) / 2;
-            const total = soma(chart.data.datasets[0].data);
             ctx.save();
             ctx.textAlign = 'center';
             ctx.fillStyle = '#0f172a';
             ctx.font = "700 22px 'Inter', system-ui, sans-serif";
-            ctx.fillText(total.toLocaleString('pt-BR'), x, y + 4);
+            ctx.fillText(num(soma(chart.data.datasets[0].data)), x, y + 4);
             ctx.fillStyle = '#94a3b8';
-            ctx.font = "500 10px 'Inter', system-ui, sans-serif";
+            ctx.font = "600 10px 'Inter', system-ui, sans-serif";
             ctx.fillText('ATIVOS', x, y + 20);
             ctx.restore();
         }
     };
 
-    if (el('chartAberturas')) {
-        new Chart(el('chartAberturas'), {
-            type: 'bar',
-            data: {
-                labels: graficos.meses,
-                datasets: [
-                    { label: 'Estadual', data: graficos.aberturas.estadual, backgroundColor: cores.estadual, borderRadius: 6, maxBarThickness: 26 },
-                    { label: 'Municipal', data: graficos.aberturas.municipal, backgroundColor: cores.municipal, borderRadius: 6, maxBarThickness: 26 },
-                ]
-            },
-            options: {
-                maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
-                scales: {
-                    y: { stacked: true, beginAtZero: true, ticks: { precision: 0, padding: 8 }, grid, border: semBorda },
-                    x: { stacked: true, grid: { display: false }, border: semBorda },
-                },
-                plugins: {
-                    legend: { position: 'top', align: 'end' },
-                    tooltip: { callbacks: { footer: itens => 'Total: ' + soma(itens.map(i => i.parsed.y)) } },
-                },
-            }
-        });
-    }
-
-    if (el('chartCompetencia')) {
-        const c = graficos.por_competencia;
-        new Chart(el('chartCompetencia'), {
+    // ---- Etapa por competência (barras horizontais empilhadas) ----
+    if (el('chartEtapas') && graficos.etapas_por_competencia) {
+        const comp = graficos.etapas_por_competencia;
+        const rotulos = graficos.etapas_rotulos;
+        const totais = ['estadual', 'municipal'].map(c => soma(Object.values(comp[c])));
+        new Chart(el('chartEtapas'), {
             type: 'bar',
             data: {
                 labels: ['Estadual', 'Municipal'],
-                datasets: [
-                    { label: 'Em dia', data: [c.estadual.em_dia, c.municipal.em_dia], backgroundColor: cores.emDia, borderRadius: 6 },
-                    { label: 'Pendentes', data: [c.estadual.pendente, c.municipal.pendente], backgroundColor: cores.pendente, borderRadius: 6 },
-                    { label: 'Sem exigência', data: [c.estadual.sem_exigencia, c.municipal.sem_exigencia], backgroundColor: cores.neutro, borderRadius: 6 },
-                ]
+                datasets: Object.keys(rotulos).map(chave => ({
+                    label: rotulos[chave],
+                    data: [comp.estadual[chave], comp.municipal[chave]],
+                    backgroundColor: etapaCor[chave],
+                    ...barra({ maxBarThickness: 34 }),
+                })),
             },
             options: {
-                maintainAspectRatio: false,
+                indexAxis: 'y', maintainAspectRatio: false,
                 scales: {
-                    x: { stacked: true, grid: { display: false }, border: semBorda },
-                    y: { stacked: true, beginAtZero: true, ticks: { precision: 0, padding: 8 }, grid, border: semBorda },
+                    x: { stacked: true, beginAtZero: true, ticks: { precision: 0 }, grid: grade, border: semBorda },
+                    y: { stacked: true, grid: { display: false }, border: semBorda, ticks: { color: '#334155', font: { weight: '600' } } },
                 },
-                plugins: { legend: { position: 'bottom' } },
+                plugins: {
+                    legend: { position: 'bottom' },
+                    tooltip: { callbacks: {
+                        label: i => ` ${i.dataset.label}: ${num(i.parsed.x)} (${pct(i.parsed.x, totais[i.dataIndex])})`,
+                        footer: itens => 'Total: ' + num(totais[itens[0].dataIndex]),
+                    } },
+                },
             }
         });
     }
 
-    if (el('chartTipos')) {
-        const tipos = graficos.ativos_por_tipo;
-        new Chart(el('chartTipos'), {
-            type: 'doughnut',
-            data: { labels: Object.keys(tipos), datasets: [{ data: Object.values(tipos),
-                backgroundColor: ['#3b82f6', '#8b5cf6', '#f59e0b', '#10b981', '#ec4899', '#64748b', '#06b6d4'],
-                borderWidth: 3, borderColor: '#fff', hoverOffset: 6 }] },
-            options: { maintainAspectRatio: false, cutout: '68%', plugins: { legend: { position: 'bottom' } } },
-            plugins: [totalNoCentro],
-        });
-    }
-
-    if (el('chartIdade')) {
-        const idade = graficos.idade_ativos;
-        new Chart(el('chartIdade'), {
+    // ---- Tempo até o alvará (faixas ordenadas) ----
+    if (el('chartFaixasAlvara') && graficos.faixas_alvara) {
+        const f = graficos.faixas_alvara;
+        const total = soma(Object.values(f));
+        new Chart(el('chartFaixasAlvara'), {
             type: 'bar',
-            data: { labels: Object.keys(idade), datasets: [{ label: 'Processos', data: Object.values(idade),
-                backgroundColor: ['#34d399', '#fbbf24', '#fb923c', '#f87171'], borderRadius: 8, maxBarThickness: 46 }] },
+            data: { labels: Object.keys(f), datasets: [{ label: 'Alvarás definitivos', data: Object.values(f), backgroundColor: cor.rampaVerde, ...barra({ maxBarThickness: 44 }) }] },
             options: {
-                maintainAspectRatio: false, plugins: { legend: { display: false } },
+                maintainAspectRatio: false, plugins: { legend: { display: false },
+                    tooltip: { callbacks: { label: i => ` ${num(i.parsed.y)} alvarás (${pct(i.parsed.y, total)})` } } },
                 scales: {
-                    y: { beginAtZero: true, ticks: { precision: 0, padding: 8 }, grid, border: semBorda },
+                    y: { beginAtZero: true, ticks: { precision: 0, padding: 6 }, grid: grade, border: semBorda },
                     x: { grid: { display: false }, border: semBorda },
                 },
             }
         });
     }
 
+    // ---- Aberturas por mês (licenciamento: abertos x alvarás; demais: por competência) ----
+    if (el('chartAberturas')) {
+        const licenciamento = @json($tipoFoco === 'licenciamento');
+        const abertosMes = graficos.aberturas.estadual.map((v, i) => v + graficos.aberturas.municipal[i]);
+        const datasets = licenciamento
+            ? [
+                { type: 'bar', label: 'Licenciamentos abertos', data: abertosMes, backgroundColor: cor.abertos, order: 2, ...barra({ maxBarThickness: 22 }) },
+                { type: 'line', label: 'Alvarás definitivos emitidos', data: graficos.alvaras_mes, borderColor: cor.bom, backgroundColor: cor.bom,
+                  borderWidth: 2, cubicInterpolationMode: 'monotone', pointRadius: 4, pointHoverRadius: 6, pointBorderColor: '#fff', pointBorderWidth: 2, order: 1 },
+            ]
+            : [
+                { label: 'Estadual', data: graficos.aberturas.estadual, backgroundColor: cor.estadual, ...barra({ maxBarThickness: 24 }) },
+                { label: 'Municipal', data: graficos.aberturas.municipal, backgroundColor: cor.municipal, ...barra({ maxBarThickness: 24 }) },
+            ];
+        new Chart(el('chartAberturas'), {
+            type: 'bar',
+            data: { labels: graficos.meses, datasets },
+            options: {
+                maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+                scales: {
+                    y: { stacked: !licenciamento, beginAtZero: true, ticks: { precision: 0, padding: 8 }, grid: grade, border: semBorda },
+                    x: { stacked: !licenciamento, grid: { display: false }, border: semBorda },
+                },
+                plugins: {
+                    legend: { position: 'top', align: 'end' },
+                    tooltip: { callbacks: { footer: itens => licenciamento ? '' : 'Total: ' + num(soma(itens.map(i => i.parsed.y))) } },
+                },
+            }
+        });
+    }
+
+    // ---- Estadual x municipal ----
+    if (el('chartCompetencia')) {
+        const c = graficos.por_competencia;
+        const totais = ['estadual', 'municipal'].map(k => c[k].em_dia + c[k].pendente + c[k].sem_exigencia);
+        new Chart(el('chartCompetencia'), {
+            type: 'bar',
+            data: {
+                labels: ['Estadual', 'Municipal'],
+                datasets: [
+                    { label: 'Abriram', data: [c.estadual.em_dia, c.municipal.em_dia], backgroundColor: cor.bom, ...barra({ maxBarThickness: 56 }) },
+                    { label: 'Precisam abrir', data: [c.estadual.pendente, c.municipal.pendente], backgroundColor: cor.critico, ...barra({ maxBarThickness: 56 }) },
+                    { label: 'Sem exigência', data: [c.estadual.sem_exigencia, c.municipal.sem_exigencia], backgroundColor: cor.neutro, ...barra({ maxBarThickness: 56 }) },
+                ]
+            },
+            options: {
+                maintainAspectRatio: false,
+                scales: {
+                    x: { stacked: true, grid: { display: false }, border: semBorda, ticks: { color: '#334155', font: { weight: '600' } } },
+                    y: { stacked: true, beginAtZero: true, ticks: { precision: 0, padding: 8 }, grid: grade, border: semBorda },
+                },
+                plugins: {
+                    legend: { position: 'bottom' },
+                    tooltip: { callbacks: {
+                        label: i => ` ${i.dataset.label}: ${num(i.parsed.y)} (${pct(i.parsed.y, totais[i.dataIndex])})`,
+                        footer: itens => 'Total: ' + num(totais[itens[0].dataIndex]),
+                    } },
+                },
+            }
+        });
+    }
+
+    // ---- Processos ativos por tipo (cor fixa por tipo, não pela posição) ----
+    if (el('chartTipos')) {
+        const tipos = graficos.ativos_por_tipo;
+        const nomes = Object.keys(tipos);
+        let extra = 0;
+        const cores = nomes.map(n => cor.tipos[n] || cor.extras[extra++ % cor.extras.length]);
+        const total = soma(Object.values(tipos));
+        new Chart(el('chartTipos'), {
+            type: 'doughnut',
+            data: { labels: nomes, datasets: [{ data: Object.values(tipos), backgroundColor: cores, borderWidth: 2, borderColor: '#fff', hoverOffset: 6 }] },
+            options: {
+                maintainAspectRatio: false, cutout: '70%',
+                plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: i => ` ${i.label}: ${num(i.parsed)} (${pct(i.parsed, total)})` } } },
+            },
+            plugins: [totalNoCentro],
+        });
+    }
+
+    // ---- Idade dos processos ativos (faixas ordenadas → um tom, do claro ao escuro) ----
+    if (el('chartIdade')) {
+        const idade = graficos.idade_ativos;
+        const total = soma(Object.values(idade));
+        new Chart(el('chartIdade'), {
+            type: 'bar',
+            data: { labels: Object.keys(idade), datasets: [{ label: 'Processos', data: Object.values(idade), backgroundColor: cor.rampa, ...barra({ maxBarThickness: 46 }) }] },
+            options: {
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: { callbacks: { label: i => ` ${num(i.parsed.y)} processos (${pct(i.parsed.y, total)})` } } },
+                scales: {
+                    y: { beginAtZero: true, ticks: { precision: 0, padding: 8 }, grid: grade, border: semBorda },
+                    x: { grid: { display: false }, border: semBorda },
+                },
+            }
+        });
+    }
+
+    // ---- Municípios com mais pendências ----
     if (el('chartMunicipios')) {
         const m = graficos.top_municipios;
         new Chart(el('chartMunicipios'), {
             type: 'bar',
-            data: { labels: Object.keys(m), datasets: [{ label: 'Pendentes', data: Object.values(m), backgroundColor: '#f87171', borderRadius: 6, maxBarThickness: 16 }] },
+            data: { labels: Object.keys(m), datasets: [{ label: 'Precisam abrir', data: Object.values(m), backgroundColor: cor.critico, ...barra({ maxBarThickness: 14 }) }] },
             options: {
                 indexAxis: 'y', maintainAspectRatio: false, plugins: { legend: { display: false } },
                 scales: {
-                    x: { beginAtZero: true, ticks: { precision: 0 }, grid, border: semBorda },
+                    x: { beginAtZero: true, ticks: { precision: 0 }, grid: grade, border: semBorda },
                     y: { grid: { display: false }, border: semBorda, ticks: { color: '#334155' } },
                 },
             }
         });
     }
 
+    // ---- Abertura por tipo exigido ----
     if (el('chartCobertura')) {
         const t = graficos.cobertura_tipos;
         new Chart(el('chartCobertura'), {
             type: 'bar',
             data: { labels: t.map(i => i.nome), datasets: [
-                { label: 'Abriram', data: t.map(i => i.atendidos), backgroundColor: cores.emDia, borderRadius: 6 },
-                { label: 'Não abriram', data: t.map(i => i.pendentes), backgroundColor: cores.pendente, borderRadius: 6 },
+                { label: 'Abriram', data: t.map(i => i.atendidos), backgroundColor: cor.bom, ...barra({ maxBarThickness: 22 }) },
+                { label: 'Precisam abrir', data: t.map(i => i.pendentes), backgroundColor: cor.critico, ...barra({ maxBarThickness: 22 }) },
             ] },
             options: {
                 indexAxis: 'y', maintainAspectRatio: false,
                 scales: {
-                    x: { stacked: true, beginAtZero: true, ticks: { precision: 0 }, grid, border: semBorda },
+                    x: { stacked: true, beginAtZero: true, ticks: { precision: 0 }, grid: grade, border: semBorda },
                     y: { stacked: true, grid: { display: false }, border: semBorda, ticks: { color: '#334155' } },
                 },
-                plugins: { legend: { position: 'bottom' } },
+                plugins: {
+                    legend: { position: 'bottom' },
+                    tooltip: { callbacks: { label: i => ` ${i.dataset.label}: ${num(i.parsed.x)} (${pct(i.parsed.x, t[i.dataIndex].atendidos + t[i.dataIndex].pendentes)})` } },
+                },
             }
         });
     }

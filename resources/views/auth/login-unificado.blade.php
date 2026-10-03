@@ -3,72 +3,15 @@
 @section('title', 'Login - InfoVISA')
 
 @section('content')
-<div class="min-h-screen flex bg-slate-50 font-sans antialiased">
-    {{-- Painel da marca (desktop) --}}
-    <div class="hidden lg:flex lg:w-[38%] xl:w-[34%] max-w-[520px] relative overflow-hidden bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-700 text-white">
-        <div class="pointer-events-none absolute -top-32 -left-32 w-[28rem] h-[28rem] rounded-full bg-white/10 blur-3xl"></div>
-        <div class="pointer-events-none absolute -bottom-40 -right-24 w-[30rem] h-[30rem] rounded-full bg-fuchsia-400/20 blur-3xl"></div>
-        <svg class="pointer-events-none absolute inset-0 w-full h-full opacity-[0.07]" aria-hidden="true">
-            <defs><pattern id="login-dots" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.5" fill="white"/></pattern></defs>
-            <rect width="100%" height="100%" fill="url(#login-dots)"/>
-        </svg>
-
-        <div class="relative z-10 flex flex-col justify-between w-full p-8 xl:p-10">
-            <a href="{{ route('home') }}" class="inline-flex items-center gap-3 w-fit">
-                <div class="w-10 h-10 rounded-xl bg-white/15 ring-1 ring-white/25 backdrop-blur flex items-center justify-center">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-                </div>
-                <div class="leading-tight">
-                    <p class="font-bold text-lg tracking-tight">InfoVISA</p>
-                    <p class="text-[10px] font-semibold uppercase tracking-widest text-white/60">Vigilância Sanitária · Tocantins</p>
-                </div>
-            </a>
-
-            <div class="max-w-md">
-                <h2 class="text-2xl xl:text-3xl font-bold tracking-tight leading-tight">Vigilância Sanitária digital, simples e transparente.</h2>
-                <p class="mt-4 text-white/75 leading-relaxed">Protocole processos, envie documentos e acompanhe cada etapa do seu licenciamento em um só lugar.</p>
-
-                <ul class="mt-8 space-y-3">
-                    <li class="flex items-center gap-3 text-sm text-white/90">
-                        <span class="w-8 h-8 rounded-lg bg-white/15 ring-1 ring-white/20 flex items-center justify-center flex-shrink-0">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                        </span>
-                        Licenciamento, projetos, rotulagem e mais
-                    </li>
-                    <li class="flex items-center gap-3 text-sm text-white/90">
-                        <span class="w-8 h-8 rounded-lg bg-white/15 ring-1 ring-white/20 flex items-center justify-center flex-shrink-0">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
-                        </span>
-                        Documentos assinados digitalmente
-                    </li>
-                    <li class="flex items-center gap-3 text-sm text-white/90">
-                        <span class="w-8 h-8 rounded-lg bg-white/15 ring-1 ring-white/20 flex items-center justify-center flex-shrink-0">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                        </span>
-                        Acompanhamento de prazos em tempo real
-                    </li>
-                </ul>
-            </div>
-
-            <div class="text-xs text-white/50 space-y-1">
-                <p>© {{ date('Y') }} InfoVISA · Sistema oficial de Vigilância Sanitária do Tocantins</p>
-                <p class="flex items-center gap-2">
-                    <span>Desenvolvido por <span class="font-semibold text-white/80">Erick Vinicius</span></span>
-                    <span class="px-1.5 py-0.5 rounded-md bg-white/10 ring-1 ring-white/15 text-[10px] font-semibold text-white/80">v3.0</span>
-                </p>
-            </div>
-        </div>
-    </div>
-
+<div class="min-h-screen flex items-center justify-center bg-slate-50 font-sans antialiased p-4 sm:p-8">
     {{-- Formulário --}}
-    <div class="flex-1 flex items-center justify-center p-4 sm:p-8">
     <div class="w-full max-w-md">
         {{-- Card de Login --}}
         <div class="bg-white rounded-3xl shadow-xl shadow-slate-900/5 ring-1 ring-slate-200/80 p-7 sm:p-9">
             {{-- Logo e Cabeçalho --}}
-            <div class="mb-7">
-                <img src="{{ asset('img/logo.png') }}" alt="InfoVISA" class="h-11 w-auto mb-6">
-                <h1 class="text-2xl font-bold text-slate-900 tracking-tight mb-1">Bem-vindo de volta 👋</h1>
+            <div class="mb-7 text-center">
+                <img src="{{ asset('img/logo.png') }}" alt="InfoVISA" class="h-11 w-auto mx-auto mb-6">
+                <h1 class="text-2xl font-bold text-slate-900 tracking-tight mb-1">Bem-vindo de volta</h1>
                 <p class="text-slate-500 text-sm">Entre com suas credenciais para acessar</p>
             </div>
 
@@ -214,7 +157,6 @@
                 Voltar para página inicial
             </a>
         </div>
-    </div>
     </div>
 </div>
 

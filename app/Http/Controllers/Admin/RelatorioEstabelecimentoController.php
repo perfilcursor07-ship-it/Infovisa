@@ -259,15 +259,23 @@ class RelatorioEstabelecimentoController extends Controller
             $processos->load(['documentos', 'pastas', 'unidades']);
         }
 
-        $docCompleta = function ($processo, $linha) {
+        $obrigatoriosDoProcesso = function ($processo, $linha) {
             $processo->setRelation('estabelecimento', $linha['estabelecimento']);
-            $obrigatorios = $processo->getDocumentosObrigatoriosChecklist()->where('obrigatorio', true);
 
-            return $obrigatorios->isEmpty() || $obrigatorios->every(fn ($d) => $d['status'] === 'aprovado');
+            return $processo->getDocumentosObrigatoriosChecklist()->where('obrigatorio', true);
         };
+        // Sem documento obrigatório configurado conta como "completa" (regra da tela de Processos)
+        $completaPeloChecklist = fn ($obrigatorios) => $obrigatorios->isEmpty() || $obrigatorios->every(fn ($d) => $d['status'] === 'aprovado');
 
-        $linhas = $linhas->map(function ($linha) use ($tipo, $comAlvara, $docCompleta) {
+        // Dias (com 1 casa decimal) entre duas datas; null se faltar alguma
+        $dias = fn ($de, $ate) => $de && $ate ? round(max(0, $ate->getTimestamp() - $de->getTimestamp()) / 86400, 1) : null;
+
+        $linhas = $linhas->map(function ($linha) use ($tipo, $comAlvara, $obrigatoriosDoProcesso, $completaPeloChecklist, $dias) {
             $processo = $linha['demandas'][$tipo]['processo'] ?? null;
+            $obrigatorios = $processo ? $obrigatoriosDoProcesso($processo, $linha) : collect();
+            $completa = $processo ? $completaPeloChecklist($obrigatorios) : false;
+            // Processo aberto sem nenhum documento obrigatório configurado: "completo" só por falta de checklist
+            $linha['sem_checklist'] = $processo && $obrigatorios->isEmpty();
 
             if (!$processo) {
                 $etapa = 'nao_abriu';
@@ -276,11 +284,35 @@ class RelatorioEstabelecimentoController extends Controller
                 // Tempo só para o alvará definitivo (provisório não conclui o licenciamento)
                 $definitivo = $comAlvara[$processo->id]['definitivo'];
                 $linha['alvara_definitivo'] = (bool) $definitivo;
+                $linha['alvara_definitivo_em'] = $definitivo;
                 $linha['dias_ate_alvara'] = $definitivo ? (int) $processo->created_at->diffInDays($definitivo) : null;
                 // Na tela de Processos estes aparecem como "Incompletos" (o checklist não olha o alvará)
-                $linha['alvara_doc_incompleta'] = !$docCompleta($processo, $linha);
+                $linha['alvara_doc_incompleta'] = !$completa;
             } else {
-                $etapa = $docCompleta($processo, $linha) ? 'doc_completa' : 'doc_incompleta';
+                $etapa = $completa ? 'doc_completa' : 'doc_incompleta';
+            }
+
+            // Tempos do processo do ano (para os gráficos de tempo por etapa)
+            if ($processo) {
+                $docs = $processo->documentos;
+                // 1º envio de documentação: qualquer arquivo da empresa ou documento obrigatório
+                // (às vezes é a própria vigilância que anexa os documentos obrigatórios)
+                $primeiroEnvio = $docs->filter(fn ($d) => $d->tipo_usuario === 'externo' || $d->tipo_documento_obrigatorio_id)->min('created_at');
+                $docCompletaEm = $completa && !$linha['sem_checklist']
+                    ? $docs->whereNotNull('tipo_documento_obrigatorio_id')->where('status_aprovacao', 'aprovado')
+                        ->map(fn ($d) => $d->aprovado_em ?? $d->updated_at)->filter()->max()
+                    : null;
+                $primeiroEnvio = $primeiroEnvio ? \Carbon\Carbon::parse($primeiroEnvio) : null;
+                $docCompletaEm = $docCompletaEm ? \Carbon\Carbon::parse($docCompletaEm) : null;
+                $alvaraEm = $linha['alvara_definitivo_em'] ?? null;
+
+                $linha['tempos'] = [
+                    'ate_envio' => $dias($processo->created_at, $primeiroEnvio),
+                    'envio_ate_completa' => $dias($primeiroEnvio, $docCompletaEm),
+                    'completa_ate_alvara' => $docCompletaEm && $alvaraEm && $alvaraEm->greaterThanOrEqualTo($docCompletaEm) ? $dias($docCompletaEm, $alvaraEm) : null,
+                    'total_alvara' => $dias($processo->created_at, $alvaraEm),
+                    'total_completa' => $dias($processo->created_at, $docCompletaEm),
+                ];
             }
 
             $linha['etapa'] = $etapa;
@@ -381,7 +413,11 @@ class RelatorioEstabelecimentoController extends Controller
 
     private function montarLinha(Estabelecimento $e, Collection $tipos, array $filtros): array
     {
-        $competencia = $e->isCompetenciaEstadual() ? 'estadual' : 'municipal';
+        // Com um processo escolhido, vale a competência DESSE processo (ex.: Projeto Arquitetônico é
+        // estadual mesmo quando o licenciamento do estabelecimento é municipal). Sem tipo, a do estabelecimento.
+        $competencia = $filtros['tipo'] && $tipos->has($filtros['tipo'])
+            ? $tipos->get($filtros['tipo'])->resolverEscopoCompetencia($e)
+            : ($e->isCompetenciaEstadual() ? 'estadual' : 'municipal');
         // Só as atividades MARCADAS no cadastro. getTodasAtividades() usa o CNAE da Receita quando
         // nada está marcado, o que faria cadastros sem atividade "exigirem" licenciamento.
         $atividades = $this->atividadesMarcadas($e);
@@ -574,6 +610,7 @@ class RelatorioEstabelecimentoController extends Controller
             'alvara_nao_definitivo' => $linhas->where('etapa', 'com_alvara')->where('alvara_definitivo', false)->count(),
             'media_dias_alvara' => ($dias = $linhas->pluck('dias_ate_alvara')->filter(fn ($d) => $d !== null))->isNotEmpty()
                 ? (int) round($dias->avg()) : null,
+            'mediana_dias_alvara' => $dias->isNotEmpty() ? (int) round($dias->median()) : null,
             'doc_completa' => $linhas->where('etapa', 'doc_completa')->count(),
             'doc_incompleta' => $linhas->where('etapa', 'doc_incompleta')->count(),
             // Licenciamento com doc. completa: situação do parecer
@@ -613,14 +650,25 @@ class RelatorioEstabelecimentoController extends Controller
             $faixas[$faixa]++;
         }
 
-        // Aberturas de processos por mês no ano de referência (por competência do estabelecimento)
+        // Aberturas de processos por mês no ano de referência (por competência), só dos tipos controlados
+        // pelo relatório (antes entravam todos os tipos: denúncia, descentralização etc.)
         $meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+        $codigosTipos = $tipos->keys()->all();
         $aberturas = ['estadual' => array_fill(0, 12, 0), 'municipal' => array_fill(0, 12, 0)];
         foreach ($linhas as $l) {
             foreach ($l['processos'] as $p) {
-                if ((int) $p->created_at->year === $filtros['ano']) {
+                if ((int) $p->created_at->year === $filtros['ano'] && in_array($p->tipo, $codigosTipos, true)) {
                     $aberturas[$l['competencia']][$p->created_at->month - 1]++;
                 }
+            }
+        }
+
+        // Alvarás definitivos emitidos por mês (licenciamento do ano)
+        $alvarasMes = array_fill(0, 12, 0);
+        foreach ($linhas as $l) {
+            $em = $l['alvara_definitivo_em'] ?? null;
+            if ($em && (int) $em->year === $filtros['ano']) {
+                $alvarasMes[$em->month - 1]++;
             }
         }
 
@@ -628,7 +676,96 @@ class RelatorioEstabelecimentoController extends Controller
         $topMunicipios = $usuario->isMunicipal() ? collect() : $linhas->where('situacao', 'pendente')
             ->groupBy('municipio')->map->count()->sortDesc()->take(10);
 
+        // ---- Só com um processo escolhido: etapas, funil e tempos ----
+        $etapasChaves = $filtros['tipo'] === 'licenciamento'
+            ? ['nao_abriu' => 'Não abriu', 'doc_incompleta' => 'Doc. incompleta', 'doc_completa' => 'Doc. completa (sem alvará)', 'com_alvara' => 'Com alvará']
+            : ['nao_abriu' => 'Não abriu', 'doc_incompleta' => 'Doc. incompleta', 'doc_completa' => 'Doc. completa'];
+
+        $etapasPorCompetencia = $filtros['tipo']
+            ? collect(['estadual', 'municipal'])->mapWithKeys(fn ($comp) => [$comp => collect($etapasChaves)->map(
+                fn ($rotulo, $etapa) => $linhas->where('competencia', $comp)->where('etapa', $etapa)->count()
+            )->all()])->all()
+            : null;
+
+        $funil = null;
+        if ($filtros['tipo']) {
+            // Etapa mais avançada que cada estabelecimento alcançou. Cada degrau do funil conta quem chegou
+            // ATÉ ele ou além (ex.: quem já tem alvará definitivo também passou pela documentação),
+            // então o funil nunca "cresce" de uma etapa para a seguinte.
+            $nivel = function ($l) {
+                if (($l['alvara_definitivo'] ?? false)) {
+                    return 4;
+                }
+                $etapa = $l['etapa'] ?? 'nao_abriu';
+                // Sem checklist configurado não conta como documentação completa no funil
+                $completaDeVerdade = !($l['sem_checklist'] ?? false)
+                    && ($etapa === 'doc_completa' || ($etapa === 'com_alvara' && !($l['alvara_doc_incompleta'] ?? false)));
+                if ($completaDeVerdade) {
+                    return 3;
+                }
+                if (($l['tempos']['ate_envio'] ?? null) !== null || $etapa === 'com_alvara') {
+                    return 2;
+                }
+
+                return $etapa === 'nao_abriu' ? 0 : 1;
+            };
+            $niveis = $linhas->map($nivel);
+            $funil = [
+                ['rotulo' => 'Precisam abrir', 'total' => $linhas->count()],
+                ['rotulo' => 'Abriram o processo', 'total' => $niveis->filter(fn ($n) => $n >= 1)->count()],
+                ['rotulo' => 'Enviaram documentos', 'total' => $niveis->filter(fn ($n) => $n >= 2)->count()],
+                ['rotulo' => 'Documentação completa', 'total' => $niveis->filter(fn ($n) => $n >= 3)->count()],
+            ];
+            if ($filtros['tipo'] === 'licenciamento') {
+                $funil[] = ['rotulo' => 'Alvará definitivo', 'total' => $niveis->filter(fn ($n) => $n >= 4)->count()];
+            }
+        }
+
+        // Tempo de cada etapa (dias): mediana (valor típico, não distorce com casos extremos) + média + quantidade
+        $estatistica = function (Collection $valores) {
+            $valores = $valores->filter(fn ($v) => $v !== null)->sort()->values();
+            $n = $valores->count();
+            if ($n === 0) {
+                return ['n' => 0, 'mediana' => null, 'media' => null, 'maximo' => null];
+            }
+            $meio = intdiv($n, 2);
+            $mediana = $n % 2 ? $valores[$meio] : ($valores[$meio - 1] + $valores[$meio]) / 2;
+
+            return ['n' => $n, 'mediana' => round($mediana, 1), 'media' => round($valores->avg(), 1), 'maximo' => round($valores->max(), 1)];
+        };
+        $temposEtapas = null;
+        if ($filtros['tipo']) {
+            $tempos = $linhas->pluck('tempos')->filter();
+            $temposEtapas = [
+                ['rotulo' => 'Abertura → 1º envio da empresa', 'quem' => 'empresa'] + $estatistica($tempos->pluck('ate_envio')),
+                ['rotulo' => '1º envio → documentação completa', 'quem' => 'empresa + vigilância'] + $estatistica($tempos->pluck('envio_ate_completa')),
+            ];
+            if ($filtros['tipo'] === 'licenciamento') {
+                $temposEtapas[] = ['rotulo' => 'Documentação completa → alvará', 'quem' => 'vigilância'] + $estatistica($tempos->pluck('completa_ate_alvara'));
+                $temposEtapas[] = ['rotulo' => 'Total: abertura → alvará definitivo', 'quem' => 'total', 'total' => true] + $estatistica($tempos->pluck('total_alvara'));
+            } else {
+                $temposEtapas[] = ['rotulo' => 'Total: abertura → documentação completa', 'quem' => 'total', 'total' => true] + $estatistica($tempos->pluck('total_completa'));
+            }
+        }
+
+        // Quanto tempo levou até o alvará definitivo (distribuição)
+        $faixasAlvara = null;
+        if ($filtros['tipo'] === 'licenciamento') {
+            $faixasAlvara = ['Até 15 dias' => 0, '16 a 30 dias' => 0, '31 a 60 dias' => 0, '61 a 90 dias' => 0, 'Mais de 90 dias' => 0];
+            foreach ($linhas->pluck('dias_ate_alvara')->filter(fn ($d) => $d !== null) as $d) {
+                $faixa = $d <= 15 ? 'Até 15 dias' : ($d <= 30 ? '16 a 30 dias' : ($d <= 60 ? '31 a 60 dias' : ($d <= 90 ? '61 a 90 dias' : 'Mais de 90 dias')));
+                $faixasAlvara[$faixa]++;
+            }
+        }
+
         return [
+            'sem_checklist' => $linhas->where('sem_checklist', true)->count(),
+            'alvaras_mes' => $alvarasMes,
+            'etapas_rotulos' => $etapasChaves,
+            'etapas_por_competencia' => $etapasPorCompetencia,
+            'funil' => $funil,
+            'tempos_etapas' => $temposEtapas,
+            'faixas_alvara' => $faixasAlvara,
             'por_competencia' => $porCompetencia,
             'cobertura_tipos' => $tipos->map(fn ($t, $codigo) => [
                 'nome' => $t->nome . ($t->anual ? ' ' . $filtros['ano'] : ''),

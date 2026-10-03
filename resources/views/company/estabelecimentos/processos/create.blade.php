@@ -130,6 +130,21 @@
                 </div>
                 @endif
 
+                {{-- Licenciamento indisponível: competência municipal em município que não usa o InfoVISA --}}
+                @if(!empty($avisoLicenciamentoIndisponivel))
+                <div class="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                    <div class="flex items-start gap-3">
+                        <svg class="w-5 h-5 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <div class="flex-1">
+                            <h4 class="text-sm font-medium text-amber-800">Licenciamento Sanitário não disponível no InfoVISA</h4>
+                            <p class="mt-1 text-sm text-amber-700">{{ $avisoLicenciamentoIndisponivel }}</p>
+                        </div>
+                    </div>
+                </div>
+                @endif
+
                 @if($tiposProcesso->count() > 0)
                     <label class="block text-sm font-medium text-gray-700 mb-4">Selecione o tipo de processo</label>
                     

@@ -33,8 +33,14 @@
     </div>
     @endif
 
+    @if(!empty($estabelecimento->atividades_declaradas))
+    <div class="mb-6">
+        @include('estabelecimentos.partials.atividades-declaradas')
+    </div>
+    @endif
+
     {{-- Formulário --}}
-    <form method="POST" 
+    <form method="POST"
           action="{{ route('admin.estabelecimentos.atividades.update', $estabelecimento->id) }}"
           x-data="atividadesForm()"
           x-init="init()"

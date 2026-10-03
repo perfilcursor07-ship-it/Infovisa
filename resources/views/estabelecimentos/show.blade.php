@@ -6,23 +6,33 @@
 @section('content')
 <div class="space-y-4">
     {{-- Header com botões --}}
-    <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 px-4 sm:px-5 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-slate-50 via-white to-white">
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 px-4 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div class="flex items-center gap-3 min-w-0">
             <a href="{{ route('admin.estabelecimentos.index') }}" title="Voltar"
-               class="w-9 h-9 flex-shrink-0 inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition">
+               class="w-8 h-8 flex-shrink-0 inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
                 </svg>
             </a>
-            <div class="w-11 h-11 flex-shrink-0 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-blue-500/25">
+            <div class="w-10 h-10 flex-shrink-0 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
                 </svg>
             </div>
             <div class="min-w-0">
-                <p class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">{{ $estabelecimento->tipo_pessoa === 'juridica' ? 'Pessoa Jurídica' : 'Pessoa Física' }}</p>
-                <h2 class="text-xl font-bold text-slate-900 tracking-tight truncate">{{ $estabelecimento->nome_fantasia }}</h2>
-                <p class="text-xs text-slate-500 tabular-nums">{{ $estabelecimento->documento_formatado }}</p>
+                <h2 class="text-lg font-semibold text-slate-900 leading-tight truncate" title="{{ $estabelecimento->nome_fantasia }}">{{ $estabelecimento->nome_fantasia }}</h2>
+                <p class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500">
+                    <span class="tabular-nums">{{ $estabelecimento->documento_formatado }}</span>
+                    <span class="text-slate-300">•</span>
+                    <span>{{ $estabelecimento->tipo_pessoa === 'juridica' ? 'Pessoa Jurídica' : 'Pessoa Física' }}</span>
+                    @if($estabelecimento->status === 'aprovado' && $estabelecimento->aprovadoPor)
+                    <span class="text-slate-300">•</span>
+                    <span class="inline-flex items-center gap-1">
+                        <svg class="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        Aprovado por <strong class="font-medium text-slate-700">{{ $estabelecimento->aprovadoPor->nome }}</strong> em {{ $estabelecimento->aprovado_em->format('d/m/Y H:i') }}
+                    </span>
+                    @endif
+                </p>
             </div>
         </div>
 
@@ -128,44 +138,14 @@
             </div>
         </div>
     </div>
-    @elseif($estabelecimento->status === 'aprovado' && $estabelecimento->aprovadoPor)
-    <div class="bg-green-50 border border-l-4 border-green-400 px-4 py-3 rounded-xl">
-        <div class="flex items-start">
-            <div class="flex-shrink-0">
-                <svg class="h-5 w-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
-            </div>
-            <div class="ml-3">
-                <p class="text-sm text-green-700">
-                    Aprovado por <strong>{{ $estabelecimento->aprovadoPor->nome }}</strong> em {{ $estabelecimento->aprovado_em->format('d/m/Y H:i') }}
-                </p>
-            </div>
-        </div>
-    </div>
     @endif
 
     {{-- Layout de 2 Colunas --}}
-    <style>
-        @media (max-width: 768px) {
-            .estabelecimento-container {
-                flex-direction: column !important;
-            }
-            .estabelecimento-menu {
-                width: 100% !important;
-                min-width: unset !important;
-            }
-            .estabelecimento-menu-sticky {
-                position: relative !important;
-                top: 0 !important;
-            }
-        }
-    </style>
-    <div class="estabelecimento-container" style="display: flex; gap: 1.5rem;">
+    <div class="grid grid-cols-1 md:grid-cols-[15rem_minmax(0,1fr)] lg:grid-cols-[17rem_minmax(0,1fr)] gap-4 items-start">
         {{-- Coluna Esquerda - Menu de Ações --}}
-        <div class="estabelecimento-menu space-y-4" style="width: 280px; min-width: 280px;">
-            <div class="estabelecimento-menu-sticky bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 sticky top-20">
-                <h3 class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2 px-1">Ações</h3>
+        <div class="space-y-4">
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-3 md:sticky md:top-20">
+                <h3 class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 px-2">Ações</h3>
                 <div class="space-y-0.5">
                     @if($estabelecimento->ativo)
                     {{-- Editar --}}
@@ -197,8 +177,8 @@
                         Atividades
                     </a>
 
-                    {{-- Documentos Obrigatórios (definição manual - vigilância municipal) --}}
-                    @if($estabelecimento->usaDocumentosManuais())
+                    {{-- Documentos Obrigatórios (definição manual - somente vigilância municipal) --}}
+                    @if($estabelecimento->podeGerenciarDocumentosManuais(auth('interno')->user()))
                     <a href="{{ route('admin.estabelecimentos.documentos-manuais.edit', $estabelecimento->id) }}"
                        class="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium text-slate-600 hover:bg-green-50 hover:text-green-700 rounded-lg transition-colors group">
                         <svg class="w-[18px] h-[18px] text-slate-400 group-hover:text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -273,7 +253,7 @@
                     </a>
                     @endif
 
-                    <hr class="my-4">
+                    <hr class="my-2.5 border-slate-100">
 
                     {{-- Ações de Aprovação --}}
                     @if($estabelecimento->status === 'pendente')
@@ -304,7 +284,7 @@
 
                     {{-- Aprovação do módulo Unidade Móvel (solicitação de estabelecimento já aprovado) --}}
                     @if($estabelecimento->status_unidade_movel === 'pendente' && $estabelecimento->status === 'aprovado')
-                        <hr class="my-4">
+                        <hr class="my-2.5 border-slate-100">
                         <p class="px-1 text-xs font-semibold text-fuchsia-700 uppercase tracking-wide">Solicitação de Unidade Móvel</p>
                         <button onclick="document.getElementById('modal-aprovar-um').classList.remove('hidden')"
                                 class="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] font-semibold text-white bg-fuchsia-600 hover:bg-fuchsia-700 rounded-lg transition-colors">
@@ -323,7 +303,7 @@
                     @endif
 
                     @if(auth('interno')->user()->nivel_acesso->isAdmin())
-                    <hr class="my-4">
+                    <hr class="my-2.5 border-slate-100">
 
                     {{-- Voltar para Pendente (apenas para aprovados sem processos) --}}
                     @if($estabelecimento->status === 'aprovado' && $estabelecimento->processos()->count() === 0)
@@ -367,7 +347,7 @@
                     </a>
 
                     @if(auth('interno')->user()->nivel_acesso->isAdmin())
-                    <hr class="my-4">
+                    <hr class="my-2.5 border-slate-100">
 
                     <form action="{{ route('admin.estabelecimentos.ativar', $estabelecimento->id) }}" method="POST">
                         @csrf
@@ -405,102 +385,107 @@
         </div>
 
         {{-- Coluna Direita - Dados do Estabelecimento --}}
-        <div class="space-y-6 min-w-0" style="flex: 1;">
+        <div class="space-y-4 min-w-0">
             {{-- Informações Gerais --}}
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
-                <div class="px-4 py-3 bg-gradient-to-r from-blue-50 to-blue-100 border-b border-slate-200">
-                    <h3 class="text-xs font-semibold text-slate-900 flex items-center gap-2">
-                        <svg class="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
-                        Informações Gerais
-                    </h3>
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="px-4 py-2.5 border-b border-slate-100 flex items-center gap-2">
+                    <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <h3 class="text-sm font-semibold text-slate-900">Informações Gerais</h3>
                 </div>
-                <div class="p-4">
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-[10px] font-medium text-slate-500 mb-0.5">{{ $estabelecimento->tipo_pessoa === 'juridica' ? 'Razão Social' : 'Nome Completo' }}</label>
-                            <p class="text-xs font-medium text-slate-900">{{ $estabelecimento->nome_razao_social }}</p>
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-medium text-slate-500 mb-0.5">Nome Fantasia</label>
-                            <p class="text-xs font-medium text-slate-900">{{ $estabelecimento->nome_fantasia ?? '-' }}</p>
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-medium text-slate-500 mb-0.5">{{ $estabelecimento->tipo_pessoa === 'juridica' ? 'CNPJ' : 'CPF' }}</label>
-                            <p class="text-xs font-mono text-slate-900">{{ $estabelecimento->documento_formatado }}</p>
-                        </div>
-                        
-                        @if($estabelecimento->tipo_pessoa === 'fisica')
-                        {{-- Campos específicos de Pessoa Física --}}
-                        @if($estabelecimento->rg)
-                        <div>
-                            <label class="block text-[10px] font-medium text-slate-500 mb-0.5">RG</label>
-                            <p class="text-xs text-slate-900">{{ $estabelecimento->rg }}</p>
-                        </div>
-                        @endif
-                        @if($estabelecimento->orgao_emissor)
-                        <div>
-                            <label class="block text-[10px] font-medium text-slate-500 mb-0.5">Órgão Emissor</label>
-                            <p class="text-xs text-slate-900">{{ $estabelecimento->orgao_emissor }}</p>
-                        </div>
-                        @endif
-                        @endif
-                        
-                        <div>
-                            <label class="block text-[10px] font-medium text-slate-500 mb-0.5">Tipo de Setor</label>
-                            <p class="text-xs text-slate-900">{{ $estabelecimento->tipo_setor ? ucfirst($estabelecimento->tipo_setor->value) : '-' }}</p>
-                        </div>
-                        @if($estabelecimento->telefone)
-                        <div>
-                            <label class="block text-[10px] font-medium text-slate-500 mb-0.5">Telefone</label>
-                            <p class="text-xs font-mono text-slate-900">{{ $estabelecimento->telefone }}</p>
-                        </div>
-                        @endif
-                        @if($estabelecimento->email)
-                        <div class="col-span-2">
-                            <label class="block text-[10px] font-medium text-slate-500 mb-0.5">E-mail</label>
-                            <p class="text-xs text-slate-900">{{ $estabelecimento->email }}</p>
-                        </div>
-                        @endif
+                <div class="grid grid-cols-1 lg:grid-cols-2 lg:divide-x divide-slate-100">
+                    {{-- Identificação --}}
+                    <div class="p-4">
+                        <h4 class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-3">Identificação</h4>
+                        <dl class="grid grid-cols-2 gap-x-4 gap-y-3">
+                            <div class="col-span-2">
+                                <dt class="text-[11px] text-slate-500">{{ $estabelecimento->tipo_pessoa === 'juridica' ? 'Razão Social' : 'Nome Completo' }}</dt>
+                                <dd class="text-sm font-medium text-slate-900">{{ $estabelecimento->nome_razao_social }}</dd>
+                            </div>
+                            <div class="col-span-2">
+                                <dt class="text-[11px] text-slate-500">Nome Fantasia</dt>
+                                <dd class="text-sm text-slate-900">{{ $estabelecimento->nome_fantasia ?? '-' }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-[11px] text-slate-500">{{ $estabelecimento->tipo_pessoa === 'juridica' ? 'CNPJ' : 'CPF' }}</dt>
+                                <dd class="text-sm text-slate-900 tabular-nums">{{ $estabelecimento->documento_formatado }}</dd>
+                            </div>
 
-                        {{-- Separador e Endereço --}}
-                        <div class="col-span-2 mt-3 pt-3 border-t border-slate-200">
-                            <h4 class="text-[10px] font-semibold text-slate-700 mb-2 flex items-center gap-1.5">
-                                <svg class="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
-                                </svg>
-                                Endereço
-                            </h4>
-                        </div>
-                        <div class="col-span-2">
-                            <label class="block text-[10px] font-medium text-slate-500 mb-0.5">Logradouro</label>
-                            <p class="text-xs font-medium text-slate-900">{{ $estabelecimento->endereco }}, {{ $estabelecimento->numero }}</p>
-                        </div>
-                        @if($estabelecimento->complemento)
-                        <div class="col-span-2">
-                            <label class="block text-[10px] font-medium text-slate-500 mb-0.5">Complemento</label>
-                            <p class="text-xs text-slate-900">{{ $estabelecimento->complemento }}</p>
-                        </div>
-                        @endif
-                        <div>
-                            <label class="block text-[10px] font-medium text-slate-500 mb-0.5">Bairro</label>
-                            <p class="text-xs text-slate-900">{{ $estabelecimento->bairro }}</p>
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-medium text-slate-500 mb-0.5">Município</label>
-                            <p class="text-xs text-slate-900">{{ $estabelecimento->cidade }}</p>
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-medium text-slate-500 mb-0.5">Estado</label>
-                            <p class="text-xs text-slate-900">{{ $estabelecimento->estado }}</p>
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-medium text-slate-500 mb-0.5">CEP</label>
-                            <p class="text-xs font-mono text-slate-900">{{ $estabelecimento->cep }}</p>
-                        </div>
+                            @if($estabelecimento->tipo_pessoa === 'fisica')
+                            {{-- Campos específicos de Pessoa Física --}}
+                            @if($estabelecimento->rg)
+                            <div>
+                                <dt class="text-[11px] text-slate-500">RG</dt>
+                                <dd class="text-sm text-slate-900">{{ $estabelecimento->rg }}</dd>
+                            </div>
+                            @endif
+                            @if($estabelecimento->orgao_emissor)
+                            <div>
+                                <dt class="text-[11px] text-slate-500">Órgão Emissor</dt>
+                                <dd class="text-sm text-slate-900">{{ $estabelecimento->orgao_emissor }}</dd>
+                            </div>
+                            @endif
+                            @endif
+
+                            <div>
+                                <dt class="text-[11px] text-slate-500">Tipo de Setor</dt>
+                                <dd class="text-sm text-slate-900">{{ $estabelecimento->tipo_setor ? ucfirst($estabelecimento->tipo_setor->value) : '-' }}</dd>
+                            </div>
+                            @if($estabelecimento->telefone)
+                            <div>
+                                <dt class="text-[11px] text-slate-500">Telefone</dt>
+                                <dd class="text-sm text-slate-900 tabular-nums">{{ $estabelecimento->telefone }}</dd>
+                            </div>
+                            @endif
+                            @if($estabelecimento->email)
+                            <div class="{{ $estabelecimento->telefone ? '' : 'col-span-2' }} min-w-0">
+                                <dt class="text-[11px] text-slate-500">E-mail</dt>
+                                <dd class="text-sm text-slate-900 truncate" title="{{ $estabelecimento->email }}">{{ $estabelecimento->email }}</dd>
+                            </div>
+                            @endif
+                        </dl>
                     </div>
+
+                    {{-- Endereço --}}
+                    <div class="p-4 border-t lg:border-t-0 border-slate-100">
+                        <h4 class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-3">Endereço</h4>
+                        <dl class="grid grid-cols-2 gap-x-4 gap-y-3">
+                            <div class="col-span-2">
+                                <dt class="text-[11px] text-slate-500">Logradouro</dt>
+                                <dd class="text-sm font-medium text-slate-900">{{ $estabelecimento->endereco }}, {{ $estabelecimento->numero }}</dd>
+                            </div>
+                            @if($estabelecimento->complemento)
+                            <div class="col-span-2">
+                                <dt class="text-[11px] text-slate-500">Complemento</dt>
+                                <dd class="text-sm text-slate-900">{{ $estabelecimento->complemento }}</dd>
+                            </div>
+                            @endif
+                            <div>
+                                <dt class="text-[11px] text-slate-500">Bairro</dt>
+                                <dd class="text-sm text-slate-900">{{ $estabelecimento->bairro }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-[11px] text-slate-500">Município</dt>
+                                <dd class="text-sm text-slate-900">{{ $estabelecimento->cidade }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-[11px] text-slate-500">Estado</dt>
+                                <dd class="text-sm text-slate-900">{{ $estabelecimento->estado }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-[11px] text-slate-500">CEP</dt>
+                                <dd class="text-sm text-slate-900 tabular-nums">{{ $estabelecimento->cep }}</dd>
+                            </div>
+                        </dl>
+                    </div>
+                </div>
+
+                {{-- Informações do Sistema --}}
+                <div class="px-4 py-2 border-t border-slate-100 bg-slate-50/60 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
+                    <span>Cadastrado em <span class="text-slate-700">{{ $estabelecimento->created_at->timezone('America/Sao_Paulo')->format('d/m/Y H:i') }}</span></span>
+                    <span>Última atualização <span class="text-slate-700">{{ $estabelecimento->updated_at->timezone('America/Sao_Paulo')->format('d/m/Y H:i') }}</span></span>
+                    <span>ID do Sistema <span class="font-mono text-slate-700">#{{ $estabelecimento->id }}</span></span>
                 </div>
             </div>
 
@@ -516,11 +501,11 @@
                 $statusProcessoPadrao = ['label' => null, 'pill' => 'bg-slate-100 text-slate-700 ring-slate-200', 'dot' => 'bg-slate-400', 'bar' => 'from-slate-400 to-slate-500'];
                 $resumoStatus = $processosAtivos->groupBy('status')->map->count();
             @endphp
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                 {{-- Cabeçalho --}}
-                <div class="px-5 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div class="flex items-center gap-3 min-w-0">
-                        <div class="w-9 h-9 flex-shrink-0 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center shadow-sm shadow-blue-500/30">
+                <div class="px-4 py-2.5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <div class="w-7 h-7 flex-shrink-0 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                             </svg>
@@ -528,9 +513,9 @@
                         <div class="min-w-0">
                             <h3 class="text-sm font-semibold text-slate-900 flex items-center gap-2">
                                 Processos Ativos
-                                <span class="inline-flex items-center justify-center min-w-[1.5rem] h-5 px-1.5 rounded-full bg-blue-600 text-white text-[11px] font-bold tabular-nums">{{ $totalProcessosAtivos }}</span>
+                                <span class="inline-flex items-center justify-center min-w-[1.25rem] h-[1.125rem] px-1.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold tabular-nums">{{ $totalProcessosAtivos }}</span>
                             </h3>
-                            <p class="text-[11px] text-slate-500 mt-0.5">
+                            <p class="text-[11px] text-slate-500">
                                 @if($totalProcessosAtivos > $processosAtivos->count())
                                     Exibindo os {{ $processosAtivos->count() }} mais recentes ·
                                 @endif
@@ -539,7 +524,7 @@
                         </div>
                     </div>
                     <a href="{{ route('admin.estabelecimentos.processos.index', $estabelecimento->id) }}"
-                       class="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg ring-1 ring-inset ring-blue-200 transition-colors self-start sm:self-auto">
+                       class="inline-flex items-center justify-center gap-1 h-7 px-2.5 text-xs font-medium text-blue-700 hover:bg-blue-50 rounded-md transition-colors self-start sm:self-auto">
                         Ver todos os processos
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
@@ -567,7 +552,7 @@
                 @else
                 {{-- Resumo por status --}}
                 @if($resumoStatus->count() > 1)
-                <div class="px-5 pt-4 flex flex-wrap gap-2">
+                <div class="px-4 pt-3 flex flex-wrap gap-2">
                     @foreach($resumoStatus as $status => $qtd)
                         @php $cfg = $statusProcessoConfig[$status] ?? $statusProcessoPadrao; @endphp
                         <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium ring-1 ring-inset {{ $cfg['pill'] }}">
@@ -579,7 +564,7 @@
                 </div>
                 @endif
 
-                <div class="p-5 grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-4">
+                <div class="p-4 grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-3">
                     @foreach($processosAtivos as $processo)
                     @php
                         $cfg = $statusProcessoConfig[$processo->status] ?? $statusProcessoPadrao;
@@ -601,54 +586,62 @@
                         $prazoClasse = $prazo === null ? null : ($prazoDias < 0 ? 'bg-red-50 text-red-700 ring-red-200' : ($prazoDias <= 3 ? 'bg-amber-50 text-amber-700 ring-amber-200' : 'bg-slate-50 text-slate-600 ring-slate-200'));
                         $prazoTexto = $prazo === null ? null : ($prazoDias < 0 ? 'Prazo vencido há ' . abs($prazoDias) . ' dia(s)' : ($prazoDias === 0 ? 'Prazo vence hoje' : 'Prazo em ' . $prazo->format('d/m')));
                     @endphp
+                    @php
+                        $escopoProcesso = $processo->resolverEscopoCompetencia();
+                        $competenciaProcesso = $escopoProcesso === 'estadual'
+                            ? ['label' => 'Estadual', 'classe' => 'bg-indigo-50 text-indigo-700 ring-indigo-200', 'titulo' => 'Processo de competência da Vigilância Sanitária Estadual']
+                            : ($escopoProcesso === 'municipal'
+                                ? ['label' => 'Municipal' . ($estabelecimento->municipio ? ' · ' . $estabelecimento->municipio : ''), 'classe' => 'bg-teal-50 text-teal-700 ring-teal-200', 'titulo' => 'Processo de competência da Vigilância Sanitária Municipal']
+                                : null);
+                    @endphp
                     <a href="{{ route('admin.estabelecimentos.processos.show', [$estabelecimento->id, $processo->id]) }}"
-                       class="group relative flex flex-col bg-white rounded-xl ring-1 ring-slate-200 hover:ring-blue-300 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
-                        {{-- Faixa de status --}}
-                        <span class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r {{ $cfg['bar'] }}"></span>
+                       class="group flex flex-col bg-white rounded-xl border border-slate-200 hover:border-blue-300 hover:shadow-md transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
 
-                        <div class="p-4 pt-5 flex-1 flex flex-col gap-3">
-                            {{-- Status + Idade --}}
-                            <div class="flex items-center justify-between gap-2">
-                                <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold ring-1 ring-inset {{ $cfg['pill'] }}">
-                                    <span class="w-1.5 h-1.5 rounded-full {{ $cfg['dot'] }} {{ $processo->status === 'parado' ? '' : 'animate-pulse' }}"></span>
+                        <div class="p-4 flex-1 flex flex-col gap-3">
+                            {{-- Tipo + Competência --}}
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="min-w-0">
+                                    <p class="text-sm font-semibold text-slate-900 group-hover:text-blue-700 leading-snug line-clamp-2 transition-colors" title="{{ $processo->tipo_nome }}">
+                                        {{ $processo->tipo_nome }}
+                                    </p>
+                                    <p class="mt-0.5 text-xs font-mono text-slate-500 tabular-nums">nº {{ $processo->numero_processo }}</p>
+                                </div>
+                                <span class="inline-flex items-center gap-1.5 flex-shrink-0 px-2 py-0.5 rounded-full text-[11px] font-semibold ring-1 ring-inset {{ $cfg['pill'] }}">
+                                    <span class="w-1.5 h-1.5 rounded-full {{ $cfg['dot'] }}"></span>
                                     {{ $cfg['label'] ?? ucfirst(str_replace('_', ' ', $processo->status)) }}
                                 </span>
-                                <span class="inline-flex items-center gap-1 text-[11px] text-slate-400 whitespace-nowrap" title="Aberto em {{ $processo->created_at->timezone('America/Sao_Paulo')->format('d/m/Y H:i') }}">
-                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                    {{ $idadeTexto }}
-                                </span>
                             </div>
 
-                            {{-- Tipo + Número --}}
-                            <div>
-                                <p class="text-xs font-semibold text-slate-600 leading-snug line-clamp-2" title="{{ $processo->tipo_nome }}">
-                                    {{ $processo->tipo_nome }}
-                                </p>
-                                <p class="mt-1 text-xl font-bold text-slate-900 group-hover:text-blue-700 tabular-nums tracking-tight transition-colors">
-                                    <span class="text-slate-300 font-semibold">nº</span> {{ $processo->numero_processo }}
-                                </p>
-                            </div>
+                            @if($competenciaProcesso)
+                            <span class="self-start inline-flex items-center gap-1.5 max-w-full px-2 py-1 rounded-md text-[11px] font-semibold ring-1 ring-inset {{ $competenciaProcesso['classe'] }}" title="{{ $competenciaProcesso['titulo'] }}">
+                                @if($escopoProcesso === 'estadual')
+                                <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10l9-6 9 6M5 10v9m4-9v9m6-9v9m4-9v9M3 21h18"/></svg>
+                                @else
+                                <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+                                @endif
+                                <span class="truncate">Competência {{ $competenciaProcesso['label'] }}</span>
+                            </span>
+                            @endif
 
                             {{-- Com quem está --}}
-                            <div class="flex items-center gap-2.5 p-2 rounded-lg bg-slate-50 ring-1 ring-inset ring-slate-100">
+                            <div class="flex items-center gap-2.5">
                                 @if($responsavel)
-                                    <span class="w-7 h-7 flex-shrink-0 rounded-full bg-gradient-to-br from-slate-600 to-slate-800 text-white text-[10px] font-bold flex items-center justify-center uppercase">{{ $iniciais }}</span>
+                                    <span class="w-7 h-7 flex-shrink-0 rounded-full bg-slate-800 text-white text-[10px] font-bold flex items-center justify-center uppercase">{{ $iniciais }}</span>
                                 @else
-                                    <span class="w-7 h-7 flex-shrink-0 rounded-full {{ $setorNome ? 'bg-slate-200 text-slate-500' : 'bg-amber-100 text-amber-600' }} flex items-center justify-center">
+                                    <span class="w-7 h-7 flex-shrink-0 rounded-full {{ $setorNome ? 'bg-slate-100 text-slate-500' : 'bg-amber-50 text-amber-600' }} flex items-center justify-center">
                                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
                                         </svg>
                                     </span>
                                 @endif
                                 <div class="min-w-0 leading-tight">
-                                    <p class="text-[10px] text-slate-400 font-medium">Com quem está</p>
+                                    <p class="text-[10px] uppercase tracking-wide text-slate-400 font-medium">Com quem está</p>
                                     @if($responsavel || $setorNome)
-                                        <p class="text-xs font-semibold text-slate-800 truncate" title="{{ $responsavel?->nome }}">{{ $responsavel?->nome ?? $setorNome }}</p>
-                                        @if($responsavel && $setorNome)
-                                        <p class="text-[10px] text-slate-500 truncate" title="{{ $setorNome }}">{{ $setorNome }}</p>
-                                        @endif
+                                        <p class="text-xs font-medium text-slate-800 truncate" title="{{ $responsavel?->nome ?? $setorNome }}">
+                                            {{ $responsavel?->nome ?? $setorNome }}@if($responsavel && $setorNome)<span class="text-slate-400 font-normal"> · {{ $setorNome }}</span>@endif
+                                        </p>
                                     @else
-                                        <p class="text-xs font-semibold text-amber-700">Não atribuído</p>
+                                        <p class="text-xs font-medium text-amber-700">Não atribuído</p>
                                     @endif
                                 </div>
                             </div>
@@ -680,19 +673,16 @@
                         </div>
 
                         {{-- Rodapé --}}
-                        <div class="px-4 py-2.5 border-t border-slate-100 bg-slate-50/60 flex items-center justify-between gap-2 text-[11px] text-slate-500">
-                            <span class="min-w-0 truncate" title="Aberto por {{ $criadoPor }}">
-                                por <span class="font-medium text-slate-600">{{ $criadoPor }}</span>
+                        <div class="px-4 py-2.5 border-t border-slate-100 flex items-center justify-between gap-2 text-[11px] text-slate-500">
+                            <span class="min-w-0 truncate" title="Aberto em {{ $processo->created_at->timezone('America/Sao_Paulo')->format('d/m/Y H:i') }} por {{ $criadoPor }}">
+                                {{ $idadeTexto }} · <span class="text-slate-600">{{ $criadoPor }}</span>
                             </span>
                             <div class="flex items-center gap-3 flex-shrink-0">
                                 <span class="inline-flex items-center gap-1" title="{{ $processo->documentos_count }} documento(s) no processo">
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
                                     <span class="tabular-nums">{{ $processo->documentos_count }}</span>
                                 </span>
-                                <span class="inline-flex items-center gap-0.5 font-semibold text-blue-600 group-hover:gap-1.5 transition-all">
-                                    Abrir
-                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
-                                </span>
+                                <svg class="w-4 h-4 text-slate-300 group-hover:text-blue-600 group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
                             </div>
                         </div>
                     </a>
@@ -704,10 +694,10 @@
 
             {{-- Municípios de Atuação - Apenas para Unidade Móvel --}}
             @if($estabelecimento->is_unidade_movel)
-            <div id="municipios-atuacao" class="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
-                <div class="px-4 py-3 bg-gradient-to-r from-fuchsia-50 to-fuchsia-100 border-b border-slate-200">
-                    <h3 class="text-xs font-semibold text-slate-900 flex items-center gap-2">
-                        <svg class="w-3.5 h-3.5 text-fuchsia-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div id="municipios-atuacao" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="px-4 py-2.5 border-b border-slate-100">
+                    <h3 class="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                        <svg class="w-4 h-4 text-fuchsia-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
                         </svg>
@@ -749,33 +739,6 @@
             </div>
             @endif
 
-            {{-- Informações do Sistema --}}
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
-                <div class="px-4 py-3 bg-gradient-to-r from-gray-50 to-gray-100 border-b border-slate-200">
-                    <h3 class="text-xs font-semibold text-slate-900 flex items-center gap-2">
-                        <svg class="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
-                        Informações do Sistema
-                    </h3>
-                </div>
-                <div class="p-4">
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-[10px] font-medium text-slate-500 mb-0.5">Cadastrado em</label>
-                            <p class="text-xs text-slate-900">{{ $estabelecimento->created_at->timezone('America/Sao_Paulo')->format('d/m/Y H:i') }}</p>
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-medium text-slate-500 mb-0.5">Última atualização</label>
-                            <p class="text-xs text-slate-900">{{ $estabelecimento->updated_at->timezone('America/Sao_Paulo')->format('d/m/Y H:i') }}</p>
-                        </div>
-                        <div class="col-span-2">
-                            <label class="block text-[10px] font-medium text-slate-500 mb-0.5">ID do Sistema</label>
-                            <p class="text-xs font-mono text-slate-900">#{{ $estabelecimento->id }}</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
         </div>
     </div>
 

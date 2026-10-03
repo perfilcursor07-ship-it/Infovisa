@@ -476,6 +476,8 @@
             </div>
             @endif
 
+            @include('estabelecimentos.partials.atividades-declaradas')
+
             {{-- Informações do Cadastro --}}
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h3 class="text-sm font-semibold text-gray-900 mb-3">Informações do Cadastro</h3>

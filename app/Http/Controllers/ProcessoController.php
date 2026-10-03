@@ -4780,16 +4780,56 @@ TXT;
         $totalTrajeto = collect($dados['trajeto'])->sum('segundos');
         $totalSetores = collect($dados['setores'])->sum('segundos');
 
+        // ---- Documentos obrigatórios ----
+        $docs = collect($dados['documentos']);
+        $aprovados = $docs->where('status', 'aprovado');
+        $enviados = $docs->filter(fn ($d) => $d['primeiro_envio']);
+        $maiorTempoDoc = (int) $docs->map(fn ($d) => $d['segundos_ate_aprovar'] ?? $d['segundos_na_situacao'] ?? 0)->max();
+        $situacaoDoc = function ($d) use ($fmt) {
+            return match (true) {
+                $d['status'] === 'aprovado' => ['chave' => 'aprovado', 'texto' => 'Aprovado'],
+                $d['status'] === 'rejeitado' => ['chave' => 'rejeitado', 'texto' => 'Aguardando correção da empresa há ' . $fmt($d['segundos_na_situacao'])],
+                $d['status'] === 'pendente' => ['chave' => 'pendente', 'texto' => 'Aguardando análise da vigilância há ' . $fmt($d['segundos_na_situacao'])],
+                default => ['chave' => 'nao_enviado', 'texto' => 'Não enviado (' . $fmt($d['segundos_sem_envio']) . ' desde a abertura)'],
+            };
+        };
+
         return response()->json([
             'numero' => $processo->numero_processo,
             'em_andamento' => $dados['em_andamento'],
             'total' => $fmt($dados['segundos_total']),
             'parado' => $dados['segundos_parado'] > 0 ? $fmt($dados['segundos_parado']) : null,
+            'resumo' => [
+                'docs_total' => $docs->count(),
+                'docs_enviados' => $enviados->count(),
+                'docs_aprovados' => $aprovados->count(),
+                'rejeicoes' => (int) $docs->sum('rejeicoes'),
+                // Empresa: da abertura até ter enviado todos os obrigatórios ao menos uma vez
+                'envio_completo' => $dados['todos_enviados_em']
+                    ? $fmt($dados['todos_enviados_em']->getTimestamp() - $dados['inicio']->getTimestamp())
+                    : null,
+                // Vigilância + correções: média do 1º envio até a aprovação, por documento
+                'media_aprovacao' => $aprovados->isNotEmpty() ? $fmt((int) round($aprovados->avg('segundos_ate_aprovar'))) : null,
+                'maior_aprovacao' => $aprovados->isNotEmpty() ? $aprovados->sortByDesc('segundos_ate_aprovar')->first()['nome'] : null,
+            ],
+            'documentos' => $docs->map(fn ($d) => [
+                'nome' => $d['nome'],
+                'situacao' => $situacaoDoc($d),
+                'enviado' => $d['primeiro_envio']?->format('d/m/Y'),
+                'apos_abertura' => $d['segundos_ate_envio'] !== null ? $fmt($d['segundos_ate_envio']) : null,
+                'aprovado' => $d['aprovado_em']?->format('d/m/Y'),
+                'ate_aprovar' => $d['segundos_ate_aprovar'] !== null ? $fmt($d['segundos_ate_aprovar']) : null,
+                'na_situacao' => $d['segundos_na_situacao'] !== null ? $fmt($d['segundos_na_situacao']) : null,
+                'rejeicoes' => $d['rejeicoes'],
+                // barra: tempo até aprovar (ou tempo na situação atual) em relação ao maior do processo
+                'percentual' => $pct($d['segundos_ate_aprovar'] ?? $d['segundos_na_situacao'] ?? 0, $maiorTempoDoc),
+            ])->values(),
             'marcos' => $marcos,
             'faltando' => collect($dados['faltando'])->map(fn ($c) => \App\Services\ProcessoLinhaTempoService::MARCOS[$c]['curto'])->values(),
             'etapas' => collect($dados['etapas'])->map(fn ($e) => [
                 'de' => $e['de'],
                 'titulo' => $e['titulo'],
+                'descricao' => $e['descricao'],
                 'duracao' => $fmt($e['segundos']),
                 'percentual' => $pct($e['segundos'], $totalEtapas),
                 'periodo' => $e['inicio']->format('d/m/Y') . ' – ' . ($e['em_andamento'] ? 'hoje' : $e['fim']->format('d/m/Y')),
