@@ -895,7 +895,7 @@
                         <svg class="w-4 h-4 {{ str_contains($classeBadge, 'red') ? 'text-red-600' : 'text-amber-600' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                     </div>
                     <div class="flex-1 min-w-0">
-                        <p class="text-sm font-medium text-slate-900 group-hover:text-blue-600 transition">{{ $doc->tipoDocumento->nome ?? 'Documento' }}</p>
+                        <p class="text-sm font-medium text-slate-900 group-hover:text-blue-600 transition">{{ $doc->nome_exibicao }}</p>
                         <p class="text-[11px] text-slate-400">Nº {{ $doc->numero_documento }} · Clique para ir ao documento</p>
                     </div>
                     <div class="flex items-center gap-2 flex-shrink-0">
@@ -1716,11 +1716,11 @@
                                             <div class="min-w-0 flex-1">
                                                 <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 min-w-0">
                                                     @if($docDigital->podeEditar())
-                                                        <a href="{{ route('admin.documentos.edit', $docDigital->id) }}" class="text-xs sm:text-sm font-semibold text-slate-900 hover:text-blue-600 truncate">{{ $docDigital->nome ?? $docDigital->tipoDocumento->nome }}</a>
+                                                        <a href="{{ route('admin.documentos.edit', $docDigital->id) }}" class="text-xs sm:text-sm font-semibold text-slate-900 hover:text-blue-600 truncate">{{ $docDigital->nome_exibicao }}</a>
                                                     @elseif($docDigital->status !== 'rascunho')
-                                                        <span @click="pdfUrl = '{{ route('admin.estabelecimentos.processos.visualizar', [$estabelecimento->id, $processo->id, $docDigital->id]) }}'; modalVisualizador = true" class="text-xs sm:text-sm font-semibold text-slate-900 hover:text-blue-600 cursor-pointer truncate">{{ $docDigital->nome ?? $docDigital->tipoDocumento->nome }}</span>
+                                                        <span @click="pdfUrl = '{{ route('admin.estabelecimentos.processos.visualizar', [$estabelecimento->id, $processo->id, $docDigital->id]) }}'; modalVisualizador = true" class="text-xs sm:text-sm font-semibold text-slate-900 hover:text-blue-600 cursor-pointer truncate">{{ $docDigital->nome_exibicao }}</span>
                                                     @else
-                                                        <span class="text-xs sm:text-sm font-semibold text-slate-900 truncate">{{ $docDigital->nome ?? $docDigital->tipoDocumento->nome }}</span>
+                                                        <span class="text-xs sm:text-sm font-semibold text-slate-900 truncate">{{ $docDigital->nome_exibicao }}</span>
                                                     @endif
                                                     <span class="text-[10px] sm:text-[11px] text-slate-400 flex-shrink-0">{{ $docDigital->created_at->format('d/m/Y') }}</span>
                                                 </div>
@@ -1749,7 +1749,7 @@
                                                         </span>
                                                     @elseif($statusGeral === 'resposta_pendente')
                                                         <button type="button"
-                                                                @click.stop="abrirModalRespostas({{ $docDigital->id }}, '{{ addslashes($docDigital->nome ?? $docDigital->tipoDocumento->nome) }}', '{{ $docDigital->numero_documento }}', '{{ route('admin.estabelecimentos.processos.visualizar', [$estabelecimento->id, $processo->id, $docDigital->id]) }}')"
+                                                                @click.stop="abrirModalRespostas({{ $docDigital->id }}, '{{ addslashes($docDigital->nome_exibicao) }}', '{{ $docDigital->numero_documento }}', '{{ route('admin.estabelecimentos.processos.visualizar', [$estabelecimento->id, $processo->id, $docDigital->id]) }}')"
                                                                 class="inline-flex items-center gap-1 px-1.5 py-0.5 bg-yellow-100 text-yellow-700 rounded text-[10px] font-bold animate-pulse hover:bg-yellow-200 transition-colors cursor-pointer">
                                                             <i class="far fa-comment-dots" style="font-size: 10px;"></i>
                                                             Avaliar {{ $docDigital->respostas->where('status', 'pendente')->count() }}
@@ -1933,7 +1933,7 @@
                                             {{-- Botão Assinar --}}
                                             @if($usuarioPrecisaAssinar)
                                                 <button type="button"
-                                                   @click="abrirModalAssinar({{ $docDigital->id }}, '{{ addslashes($docDigital->nome ?? $docDigital->tipoDocumento->nome) }}', '{{ $docDigital->numero_documento }}', '{{ $assinaturaUsuario->ordem }}', {{ json_encode($docDigital->assinaturas->map(fn($a) => ['nome' => $a->usuarioInterno->nome ?? 'Usuário', 'status' => $a->status, 'ordem' => $a->ordem, 'isCurrentUser' => $a->usuario_interno_id === auth('interno')->id()])->sortBy('ordem')->values()) }})"
+                                                   @click="abrirModalAssinar({{ $docDigital->id }}, '{{ addslashes($docDigital->nome_exibicao) }}', '{{ $docDigital->numero_documento }}', '{{ $assinaturaUsuario->ordem }}', {{ json_encode($docDigital->assinaturas->map(fn($a) => ['nome' => $a->usuarioInterno->nome ?? 'Usuário', 'status' => $a->status, 'ordem' => $a->ordem, 'isCurrentUser' => $a->usuario_interno_id === auth('interno')->id()])->sortBy('ordem')->values()) }})"
                                                    class="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
                                                    title="Assinar documento">
                                                     <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -1964,7 +1964,7 @@
 
                                             @if($podeProrrogarPrazo)
                                                 <button type="button"
-                                                        @click="abrirModalProrrogarPrazo({{ $docDigital->id }}, '{{ addslashes($docDigital->nome ?? $docDigital->tipoDocumento->nome) }}', '{{ $docDigital->numero_documento }}', '{{ $docDigital->data_vencimento?->format('d/m/Y') }}', {{ $diasProrrogacaoDisponiveis }}, '{{ route('admin.estabelecimentos.processos.documento-digital.prorrogar-prazo', [$estabelecimento->id, $processo->id, $docDigital->id]) }}')"
+                                                        @click="abrirModalProrrogarPrazo({{ $docDigital->id }}, '{{ addslashes($docDigital->nome_exibicao) }}', '{{ $docDigital->numero_documento }}', '{{ $docDigital->data_vencimento?->format('d/m/Y') }}', {{ $diasProrrogacaoDisponiveis }}, '{{ route('admin.estabelecimentos.processos.documento-digital.prorrogar-prazo', [$estabelecimento->id, $processo->id, $docDigital->id]) }}')"
                                                         class="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors"
                                                         title="Prorrogar prazo restante da notificação">
                                                     <i class="far fa-calendar-plus" style="font-size: 12px;"></i>
@@ -1974,7 +1974,7 @@
 
                                             @if($podeDefinirPrazo)
                                                 <button type="button"
-                                                        @click="abrirModalDefinirPrazo({{ $docDigital->id }}, '{{ addslashes($docDigital->nome ?? $docDigital->tipoDocumento->nome) }}', '{{ $docDigital->numero_documento }}', '{{ route('admin.estabelecimentos.processos.documento-digital.definir-prazo', [$estabelecimento->id, $processo->id, $docDigital->id]) }}')"
+                                                        @click="abrirModalDefinirPrazo({{ $docDigital->id }}, '{{ addslashes($docDigital->nome_exibicao) }}', '{{ $docDigital->numero_documento }}', '{{ route('admin.estabelecimentos.processos.documento-digital.definir-prazo', [$estabelecimento->id, $processo->id, $docDigital->id]) }}')"
                                                         class="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-cyan-700 bg-cyan-50 hover:bg-cyan-100 border border-cyan-200 rounded-lg transition-colors"
                                                         title="Definir prazo para documento já assinado">
                                                     <i class="far fa-clock" style="font-size: 12px;"></i>
@@ -2051,7 +2051,7 @@
                                                             </form>
                                                             @if($podeProrrogarPrazo)
                                                                 <button type="button"
-                                                                        @click="abrirModalProrrogarPrazo({{ $docDigital->id }}, '{{ addslashes($docDigital->nome ?? $docDigital->tipoDocumento->nome) }}', '{{ $docDigital->numero_documento }}', '{{ $docDigital->data_vencimento?->format('d/m/Y') }}', {{ $diasProrrogacaoDisponiveis }}, '{{ route('admin.estabelecimentos.processos.documento-digital.prorrogar-prazo', [$estabelecimento->id, $processo->id, $docDigital->id]) }}'); menuAberto = false"
+                                                                        @click="abrirModalProrrogarPrazo({{ $docDigital->id }}, '{{ addslashes($docDigital->nome_exibicao) }}', '{{ $docDigital->numero_documento }}', '{{ $docDigital->data_vencimento?->format('d/m/Y') }}', {{ $diasProrrogacaoDisponiveis }}, '{{ route('admin.estabelecimentos.processos.documento-digital.prorrogar-prazo', [$estabelecimento->id, $processo->id, $docDigital->id]) }}'); menuAberto = false"
                                                                         class="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 transition-colors">
                                                                     <i class="far fa-calendar-plus fa-fw" style="font-size: 13px;"></i>
                                                                     Prorrogar Prazo
@@ -2074,13 +2074,13 @@
                                                         @endif
                                                     @elseif($podeDefinirPrazo)
                                                         <button type="button"
-                                                                @click="abrirModalDefinirPrazo({{ $docDigital->id }}, '{{ addslashes($docDigital->nome ?? $docDigital->tipoDocumento->nome) }}', '{{ $docDigital->numero_documento }}', '{{ route('admin.estabelecimentos.processos.documento-digital.definir-prazo', [$estabelecimento->id, $processo->id, $docDigital->id]) }}'); menuAberto = false"
+                                                                @click="abrirModalDefinirPrazo({{ $docDigital->id }}, '{{ addslashes($docDigital->nome_exibicao) }}', '{{ $docDigital->numero_documento }}', '{{ route('admin.estabelecimentos.processos.documento-digital.definir-prazo', [$estabelecimento->id, $processo->id, $docDigital->id]) }}'); menuAberto = false"
                                                                 class="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-cyan-600 hover:text-cyan-700 hover:bg-cyan-50 transition-colors">
                                                             <i class="far fa-clock fa-fw" style="font-size: 13px;"></i>
                                                             Definir Prazo
                                                         </button>
                                                     @endif
-                                                    <button @click="excluirDocumentoDigital({{ $docDigital->id }}, '{{ addslashes($docDigital->nome ?? $docDigital->tipoDocumento->nome) }} - {{ $docDigital->numero_documento }}'); menuAberto = false"
+                                                    <button @click="excluirDocumentoDigital({{ $docDigital->id }}, '{{ addslashes($docDigital->nome_exibicao) }} - {{ $docDigital->numero_documento }}'); menuAberto = false"
                                                             class="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-red-500 hover:text-red-600 hover:bg-red-50 transition-colors">
                                                         <i class="far fa-trash-alt fa-fw" style="font-size: 13px;"></i>
                                                         Excluir
@@ -2189,7 +2189,7 @@
                                                                                 </span>
                                                                             @endif
                                                                                 <button type="button" 
-                                                                                    @click="abrirModalRespostas({{ $docDigital->id }}, '{{ addslashes($docDigital->nome ?? $docDigital->tipoDocumento->nome) }}', '{{ $docDigital->numero_documento }}', '{{ route('admin.estabelecimentos.processos.visualizar', [$estabelecimento->id, $processo->id, $docDigital->id]) }}', {{ $resposta->id }})"
+                                                                                    @click="abrirModalRespostas({{ $docDigital->id }}, '{{ addslashes($docDigital->nome_exibicao) }}', '{{ $docDigital->numero_documento }}', '{{ route('admin.estabelecimentos.processos.visualizar', [$estabelecimento->id, $processo->id, $docDigital->id]) }}', {{ $resposta->id }})"
                                                                                     class="text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline truncate">
                                                                                 📎 {{ $resposta->nome_original }}
                                                                             </button>
@@ -2214,7 +2214,7 @@
                                                                     {{-- Ações da resposta --}}
                                                                     <div class="flex items-center gap-0.5 flex-shrink-0">
                                                                           <button type="button"
-                                                                              @click="abrirModalRespostas({{ $docDigital->id }}, '{{ addslashes($docDigital->nome ?? $docDigital->tipoDocumento->nome) }}', '{{ $docDigital->numero_documento }}', '{{ route('admin.estabelecimentos.processos.visualizar', [$estabelecimento->id, $processo->id, $docDigital->id]) }}', {{ $resposta->id }})"
+                                                                              @click="abrirModalRespostas({{ $docDigital->id }}, '{{ addslashes($docDigital->nome_exibicao) }}', '{{ $docDigital->numero_documento }}', '{{ route('admin.estabelecimentos.processos.visualizar', [$estabelecimento->id, $processo->id, $docDigital->id]) }}', {{ $resposta->id }})"
                                                                                class="p-1 text-blue-600 hover:bg-blue-100 rounded transition-colors" title="Comparar com documento original">
                                                                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>

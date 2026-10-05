@@ -752,6 +752,7 @@ class ProcessoController extends Controller
             ->where('sigiloso', false)
             ->with([
                 'tipoDocumento',
+                'subcategoria',
                 'usuarioCriador',
                 'assinaturas',
                 'respostas.usuarioExterno',

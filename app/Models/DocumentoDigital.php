@@ -129,6 +129,21 @@ class DocumentoDigital extends Model
     }
 
     /**
+     * Nome para listas: nome do documento (ou do tipo) + subcategoria, ex.: "Relatório (Supervisão)".
+     */
+    public function getNomeExibicaoAttribute(): string
+    {
+        $nome = $this->nome ?: ($this->tipoDocumento->nome ?? 'Documento');
+        $subcategoria = $this->subcategoria_id ? $this->subcategoria?->nome : null;
+
+        if ($subcategoria && !str_contains(mb_strtolower($nome), mb_strtolower($subcategoria))) {
+            $nome .= " ({$subcategoria})";
+        }
+
+        return $nome;
+    }
+
+    /**
      * Relacionamento com processo
      */
     public function processo()

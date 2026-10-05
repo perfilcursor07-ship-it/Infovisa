@@ -846,7 +846,7 @@ class ProcessoController extends Controller
         // Busca documentos digitais do processo (incluindo rascunhos)
         // Inclui também documentos de lote (OS com múltiplos estabelecimentos) onde
         // o processo está no array processos_ids mas não tem processo_id individual
-        $documentosDigitais = \App\Models\DocumentoDigital::with(['tipoDocumento', 'usuarioCriador', 'assinaturas.usuarioInterno', 'primeiraVisualizacao.usuarioExterno', 'respostas.usuarioExterno', 'respostas.avaliadoPor', 'respostas.itemAtendimento', 'itensAtendimento.respostaAtual.usuarioExterno', 'itensAtendimento.respostaAtual.avaliadoPor', 'ordemServico', 'usuarioProrrogouPrazo'])
+        $documentosDigitais = \App\Models\DocumentoDigital::with(['tipoDocumento', 'subcategoria', 'usuarioCriador', 'assinaturas.usuarioInterno', 'primeiraVisualizacao.usuarioExterno', 'respostas.usuarioExterno', 'respostas.avaliadoPor', 'respostas.itemAtendimento', 'itensAtendimento.respostaAtual.usuarioExterno', 'itensAtendimento.respostaAtual.avaliadoPor', 'ordemServico', 'usuarioProrrogouPrazo'])
             ->where(function ($q) use ($processoId) {
                 $pid = (int) $processoId;
                 $q->where('processo_id', $pid)
