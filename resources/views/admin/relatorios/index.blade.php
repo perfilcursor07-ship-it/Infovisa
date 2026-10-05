@@ -7,6 +7,7 @@
     $usuarioLogado = auth('interno')->user();
     $icones = [
         'predio' => 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M8 7h8M8 11h8M8 15h5',
+        'calendario' => 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
         'lampada' => 'M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z',
         'documento' => 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
         'grafico' => 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
@@ -27,6 +28,7 @@
 
     $categorias = [
         'Estabelecimentos' => [
+            ['rota' => 'admin.relatorios.cadastro-estabelecimentos', 'titulo' => 'Cadastro de Estabelecimentos', 'descricao' => 'Quantos estabelecimentos foram cadastrados por período: ativos, inativos e baixados, com gráfico mês a mês.', 'icone' => 'calendario', 'cor' => 'emerald'],
             ['rota' => 'admin.relatorios.estabelecimentos', 'titulo' => 'Controle de Estabelecimentos e Processos', 'descricao' => 'Veja quem já abriu processo e quem ainda não abriu: licenciamento do ano, projeto arquitetônico e análise de rotulagem.', 'icone' => 'grafico', 'cor' => 'blue'],
             ['rota' => 'admin.relatorios.estabelecimentos-cnae', 'titulo' => 'Estabelecimentos por CNAE', 'descricao' => 'Quantos estabelecimentos existem por atividade, com escopo automático por perfil.', 'icone' => 'predio', 'cor' => 'cyan'],
             ['rota' => 'admin.relatorios.equipamentos-radiacao', 'titulo' => 'Equipamentos de Imagem', 'descricao' => 'Situação do cadastro de equipamentos de radiação por estabelecimento.', 'icone' => 'lampada', 'cor' => 'orange'],

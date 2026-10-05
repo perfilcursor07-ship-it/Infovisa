@@ -870,6 +870,8 @@ Route::middleware(['auth:interno', 'no-cache-auth'])->prefix('admin')->name('adm
         Route::get('/estabelecimentos', [\App\Http\Controllers\Admin\RelatorioEstabelecimentoController::class, 'index'])->name('estabelecimentos');
         Route::get('/estabelecimentos/export', [\App\Http\Controllers\Admin\RelatorioEstabelecimentoController::class, 'export'])->name('estabelecimentos.export');
         Route::get('/estabelecimentos-cnae', [\App\Http\Controllers\Admin\RelatorioController::class, 'estabelecimentosPorCnae'])->name('estabelecimentos-cnae');
+        Route::get('/cadastro-estabelecimentos', [\App\Http\Controllers\Admin\RelatorioCadastroEstabelecimentoController::class, 'index'])->name('cadastro-estabelecimentos');
+        Route::get('/cadastro-estabelecimentos/export', [\App\Http\Controllers\Admin\RelatorioCadastroEstabelecimentoController::class, 'export'])->name('cadastro-estabelecimentos.export');
         Route::get('/documentos-gerados', [\App\Http\Controllers\Admin\RelatorioController::class, 'documentosGerados'])->name('documentos-gerados');
         Route::get('/equipamentos-radiacao', [\App\Http\Controllers\Admin\RelatorioController::class, 'equipamentosRadiacao'])->name('equipamentos-radiacao');
         Route::get('/equipamentos-radiacao/export', [\App\Http\Controllers\Admin\RelatorioController::class, 'equipamentosRadiacaoExport'])->name('equipamentos-radiacao.export');

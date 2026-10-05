@@ -97,29 +97,40 @@
 
 <script>
 function modeloEditor() {
+    // O editor (Quill) fica FORA dos dados reativos do Alpine: se for guardado no estado,
+    // o Alpine o envolve num Proxy e a seleção do Quill quebra ("reading 'offset'"),
+    // impedindo que as edições cheguem ao campo "conteudo".
+    let editor = null;
+
     return {
         conteudo: @json(old('conteudo', $conteudoInicial ?? '')),
-        editor: null,
 
         init() {
             this.$nextTick(() => {
-                this.editor = new window.DocumentoRichEditor(this.$refs.editor, {
+                editor = new window.DocumentoRichEditor(this.$refs.editor, {
                     height: 700,
                     images_upload_url: @json(route('admin.documentos.upload-imagem')),
                     images_upload_handler: (blobInfo) => this.enviarImagem(blobInfo),
                 });
 
-                this.editor.setContent(this.conteudo);
-                this.editor.on('input change keyup', () => {
-                    this.conteudo = this.editor.getContent();
+                editor.setContent(this.conteudo);
+                editor.on('input change keyup', () => {
+                    this.conteudo = editor.getContent();
+                });
+
+                // Garante o conteúdo mais recente no envio do formulário
+                this.$el.closest('form')?.addEventListener('submit', () => {
+                    this.conteudo = editor.getContent();
+                    const campo = this.$el.querySelector('input[name="conteudo"]');
+                    if (campo) campo.value = this.conteudo;
                 });
             });
         },
 
         inserirVariavel(variavel) {
-            if (!this.editor) return;
-            this.editor.insertContent(variavel);
-            this.conteudo = this.editor.getContent();
+            if (!editor) return;
+            editor.insertContent(variavel);
+            this.conteudo = editor.getContent();
         },
 
         async enviarImagem(blobInfo) {
