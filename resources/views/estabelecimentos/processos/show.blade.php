@@ -1037,7 +1037,7 @@
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                         </svg>
-                        Todos os documentos foram aprovados!
+                        Todos os documentos foram verificados!
                     </p>
                     @elseif($todosEnviados && $totalPendente > 0)
                     <p class="text-[11px] text-amber-600 font-medium flex items-center gap-1 mb-2">
@@ -1053,7 +1053,7 @@
                             <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
                             </svg>
-                            {{ $totalOk }} aprovado{{ $totalOk > 1 ? 's' : '' }}
+                            {{ $totalOk }} verificado{{ $totalOk > 1 ? 's' : '' }}
                         </span>
                         @endif
                         @if($totalPendente > 0)
@@ -1955,7 +1955,7 @@
                                                     @csrf
                                                     <button type="submit" 
                                                             class="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 rounded-lg transition-colors"
-                                                            onclick="return confirm('{{ $temRespostaAprovada ? 'Encerrar prazo deste documento?' : 'Este documento está vencido e não possui resposta aprovada. Deseja encerrar o prazo mesmo assim?' }}')">
+                                                            onclick="return confirm('{{ $temRespostaAprovada ? 'Encerrar prazo deste documento?' : 'Este documento está vencido e não possui resposta verificada. Deseja encerrar o prazo mesmo assim?' }}')">
                                                         <i class="far fa-check-circle" style="font-size: 12px;"></i>
                                                         Encerrar Prazo
                                                     </button>
@@ -2043,7 +2043,7 @@
                                                             @php $temRespAprovadaDrop = $docDigital->respostas && $docDigital->respostas->where('status', 'aprovado')->count() > 0; @endphp
                                                             <form action="{{ route('admin.estabelecimentos.processos.documento-digital.finalizar-prazo', [$estabelecimento->id, $processo->id, $docDigital->id]) }}" method="POST">
                                                                 @csrf
-                                                                <button type="submit" onclick="return confirm('{{ $temRespAprovadaDrop ? 'Encerrar prazo deste documento?' : 'Este documento está vencido e não possui resposta aprovada. Deseja encerrar o prazo mesmo assim?' }}')"
+                                                                <button type="submit" onclick="return confirm('{{ $temRespAprovadaDrop ? 'Encerrar prazo deste documento?' : 'Este documento está vencido e não possui resposta verificada. Deseja encerrar o prazo mesmo assim?' }}')"
                                                                         class="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-green-600 hover:text-green-700 hover:bg-green-50 transition-colors">
                                                                     <i class="far fa-check-circle fa-fw" style="font-size: 13px;"></i>
                                                                     Encerrar Prazo
@@ -2195,7 +2195,7 @@
                                                                             </button>
                                                                             <span class="text-[10px] px-1.5 py-0.5 rounded font-medium resposta-status-badge
                                                                                 {{ $resposta->status === 'pendente' ? 'bg-yellow-100 text-yellow-700' : ($resposta->status === 'aprovado' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700') }}">
-                                                                                {{ $resposta->status === 'pendente' ? 'Pendente' : ($resposta->status === 'aprovado' ? 'Aprovado' : 'Rejeitado') }}
+                                                                                {{ $resposta->status === 'pendente' ? 'Pendente' : ($resposta->status === 'aprovado' ? 'Verificado' : 'Rejeitado') }}
                                                                             </span>
                                                                         </div>
                                                                         <p class="text-[10px] text-slate-500 mt-0.5">
@@ -2238,8 +2238,8 @@
                                                                             @csrf
                                                                             <button type="submit" 
                                                                                     class="p-1 text-green-600 hover:bg-green-100 rounded transition-colors" 
-                                                                                    title="Aprovar"
-                                                                                    onclick="return confirm('Aprovar esta resposta?')">
+                                                                                    title="Verificar"
+                                                                                    onclick="return confirm('Marcar esta resposta como verificada?')">
                                                                                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                                                                                 </svg>
@@ -2445,9 +2445,9 @@
                                                                 </span>
                                                             @endif
                                                         @elseif($documento->status_aprovacao === 'aprovado')
-                                                            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 bg-gray-100 text-gray-600 text-[10px] rounded font-bold documento-status-badge" title="{{ $documento->aprovadoPor ? 'Aprovado por ' . $documento->aprovadoPor->nome . ($documento->aprovado_em ? ' em ' . \Carbon\Carbon::parse($documento->aprovado_em)->format('d/m/Y H:i') : '') : '' }}">
+                                                            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 bg-gray-100 text-gray-600 text-[10px] rounded font-bold documento-status-badge" title="{{ $documento->aprovadoPor ? 'Verificado por ' . $documento->aprovadoPor->nome . ($documento->aprovado_em ? ' em ' . \Carbon\Carbon::parse($documento->aprovado_em)->format('d/m/Y H:i') : '') : '' }}">
                                                                 <i class="fas fa-check" style="font-size: 10px;"></i>
-                                                                Aprovado{{ $documento->aprovadoPor ? ' - ' . Str::upper(Str::words($documento->aprovadoPor->nome, 1, '')) : '' }}
+                                                                Verificado{{ $documento->aprovadoPor ? ' - ' . Str::upper(Str::words($documento->aprovadoPor->nome, 1, '')) : '' }}
                                                             </span>
                                                         @elseif($documento->status_aprovacao === 'rejeitado')
                                                             <span class="inline-flex items-center gap-1 px-1.5 py-0.5 bg-gray-100 text-gray-600 text-[10px] rounded font-bold documento-status-badge">
@@ -2465,7 +2465,7 @@
                                             @if($documento->tipo_usuario === 'externo' && $documento->status_aprovacao)
                                             <form action="{{ route('admin.estabelecimentos.processos.documento.aprovar', [$estabelecimento->id, $processo->id, $documento->id]) }}" method="POST" class="inline js-doc-aprovar {{ $documento->status_aprovacao === 'pendente' ? '' : 'hidden' }}" data-doc-id="{{ $documento->id }}">
                                                 @csrf
-                                                <button type="submit" class="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors" title="Aprovar">
+                                                <button type="submit" class="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors" title="Verificar">
                                                     <i class="fas fa-check fa-fw text-slate-500" style="font-size: 15px;"></i>
                                                 </button>
                                             </form>
@@ -3099,7 +3099,7 @@
                                                   'bg-green-100 text-green-700': respostaAtual.status === 'aprovado',
                                                   'bg-red-100 text-red-700': respostaAtual.status === 'rejeitado'
                                               }"
-                                              x-text="respostaAtual.status === 'pendente' ? 'Pendente' : (respostaAtual.status === 'aprovado' ? 'Aprovado' : 'Rejeitado')">
+                                              x-text="respostaAtual.status === 'pendente' ? 'Pendente' : (respostaAtual.status === 'aprovado' ? 'Verificado' : 'Rejeitado')">
                                         </span>
                                         <span class="text-[10px] text-slate-400 flex-shrink-0" x-text="respostaAtual.data + ' • ' + respostaAtual.usuario"></span>
                                     </div>
@@ -3155,7 +3155,7 @@
                                                     <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                                     </svg>
-                                                    Aprovado <span x-text="respostaAtual.avaliadoPor ? 'por ' + respostaAtual.avaliadoPor : ''"></span>
+                                                    Verificado <span x-text="respostaAtual.avaliadoPor ? 'por ' + respostaAtual.avaliadoPor : ''"></span>
                                                 </span>
                                             </template>
                                             <template x-if="respostaAtual.status === 'rejeitado'">
@@ -3181,11 +3181,11 @@
                                                     @csrf
                                                     <button type="submit" 
                                                             class="inline-flex items-center gap-1.5 px-5 py-2 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-lg shadow-sm transition-colors"
-                                                            onclick="return confirm('Aprovar esta resposta?')">
+                                                            onclick="return confirm('Marcar esta resposta como verificada?')">
                                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                                                         </svg>
-                                                        Aprovar
+                                                        Verificar
                                                     </button>
                                                 </form>
                                                 <button @click="showRejeitar = !showRejeitar" 
@@ -3442,7 +3442,7 @@
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                                         </svg>
-                                        Aprovar
+                                        Verificar
                                     </button>
                                     <button type="button"
                                             @click="documentoRejeitando = documentoIdAnotacoes; modalRejeitar = true"
@@ -3680,7 +3680,7 @@
                                         <span class="text-[10px] text-red-500 font-medium">Obrigatório</span>
                                         @endif
                                         @if($docObrig['status'] === 'aprovado')
-                                        <span class="text-[10px] px-1.5 py-0.5 bg-green-100 text-green-700 rounded font-medium">✓ Aprovado</span>
+                                        <span class="text-[10px] px-1.5 py-0.5 bg-green-100 text-green-700 rounded font-medium">✓ Verificado</span>
                                         @elseif($docObrig['status'] === 'pendente')
                                         <span class="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded font-medium">Pendente</span>
                                         @elseif($docObrig['status'] === 'rejeitado')
@@ -4680,7 +4680,7 @@ Os comprovantes de pagamento dos DAREs devem ser juntados em um único arquivo."
                                                             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                                             </svg>
-                                                            Arquivo aprovado: <strong>{{ $evento->dados_adicionais['nome_arquivo'] ?? 'N/D' }}</strong>
+                                                            Arquivo verificado: <strong>{{ $evento->dados_adicionais['nome_arquivo'] ?? 'N/D' }}</strong>
                                                         </p>
                                                         @if(isset($evento->dados_adicionais['usuario_externo']))
                                                         <p class="text-[10px] text-green-600 mt-0.5">Enviado por: {{ $evento->dados_adicionais['usuario_externo'] }}</p>
@@ -5843,7 +5843,7 @@ Os comprovantes de pagamento dos DAREs devem ser juntados em um único arquivo."
                         return;
                     }
 
-                    if (!confirm(`Analisar e processar ${documentosComIA.length} documento(s) pendente(s) com IA?\n\nA IA vai avaliar cada documento e executar a ação automaticamente:\n• Aprovados → serão aprovados\n• Rejeitados → serão rejeitados com o motivo da IA`)) {
+                    if (!confirm(`Analisar e processar ${documentosComIA.length} documento(s) pendente(s) com IA?\n\nA IA vai avaliar cada documento e executar a ação automaticamente:\n• Verificados → serão marcados como verificados\n• Rejeitados → serão rejeitados com o motivo da IA`)) {
                         return;
                     }
 
@@ -5917,7 +5917,7 @@ Os comprovantes de pagamento dos DAREs devem ser juntados em um único arquivo."
 
                 async aprovarDocumentoNoModal() {
                     if (!this.documentoIdAnotacoes) return;
-                    if (!confirm('Aprovar este documento?')) return;
+                    if (!confirm('Marcar este documento como verificado?')) return;
 
                     const url = `{{ url('admin/estabelecimentos/' . $estabelecimento->id . '/processos/' . $processo->id . '/documentos') }}/${this.documentoIdAnotacoes}/aprovar`;
 
@@ -5933,7 +5933,7 @@ Os comprovantes de pagamento dos DAREs devem ser juntados em um único arquivo."
                         const data = await response.json();
 
                         if (!data.success) {
-                            this.mostrarNotificacao(data.message || 'Erro ao aprovar documento', 'error');
+                            this.mostrarNotificacao(data.message || 'Erro ao verificar documento', 'error');
                             return;
                         }
 
@@ -5946,7 +5946,7 @@ Os comprovantes de pagamento dos DAREs devem ser juntados em um único arquivo."
                         }));
                     } catch (error) {
                         console.error('Erro ao aprovar documento no modal:', error);
-                        this.mostrarNotificacao('Erro ao aprovar documento', 'error');
+                        this.mostrarNotificacao('Erro ao verificar documento', 'error');
                     }
                 },
 
@@ -6130,7 +6130,7 @@ Os comprovantes de pagamento dos DAREs devem ser juntados em um único arquivo."
                                                 — vence {{ $docPrazo->data_vencimento->format('d/m/Y') }}
                                             @endif
                                             @if($docPrazo->respostas->where('status', 'aprovado')->count() > 0)
-                                                <span class="px-1.5 py-0.5 text-[9px] font-bold bg-green-100 text-green-700 rounded">Resposta aprovada</span>
+                                                <span class="px-1.5 py-0.5 text-[9px] font-bold bg-green-100 text-green-700 rounded">Resposta verificada</span>
                                             @endif
                                         </li>
                                         @endforeach
@@ -7050,7 +7050,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (status === 'pendente') {
                 badge.innerHTML = '<i class="far fa-clock" style="font-size: 10px;"></i> Pendente';
             } else if (status === 'aprovado') {
-                badge.innerHTML = '<i class="fas fa-check" style="font-size: 10px;"></i> Aprovado';
+                badge.innerHTML = '<i class="fas fa-check" style="font-size: 10px;"></i> Verificado';
             } else if (status === 'rejeitado') {
                 badge.innerHTML = '<i class="fas fa-times" style="font-size: 10px;"></i> Rejeitado';
             }
@@ -7088,7 +7088,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const badge = respostaItem.querySelector('.resposta-status-badge');
         if (badge) {
-            badge.textContent = status === 'pendente' ? 'Pendente' : (status === 'aprovado' ? 'Aprovado' : 'Rejeitado');
+            badge.textContent = status === 'pendente' ? 'Pendente' : (status === 'aprovado' ? 'Verificado' : 'Rejeitado');
             badge.classList.remove('bg-green-100', 'text-green-700', 'bg-red-100', 'text-red-700', 'bg-yellow-100', 'text-yellow-700');
             if (status === 'pendente') badge.classList.add('bg-yellow-100', 'text-yellow-700');
             if (status === 'aprovado') badge.classList.add('bg-green-100', 'text-green-700');
@@ -7149,16 +7149,16 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(r => r.json())
             .then(data => {
                 if (!data.success) {
-                    mostrarNotificacao(data.message || 'Erro ao aprovar documento', 'error');
+                    mostrarNotificacao(data.message || 'Erro ao verificar documento', 'error');
                     return;
                 }
                 atualizarDocumentoUI(docId, 'aprovado');
                 window.dispatchEvent(new CustomEvent('documento-avaliado', {
                     detail: { docId: parseInt(docId), status: 'aprovado' }
                 }));
-                mostrarNotificacao('Documento aprovado com sucesso!', 'success');
+                mostrarNotificacao('Documento verificado com sucesso!', 'success');
             })
-            .catch(() => mostrarNotificacao('Erro ao aprovar documento', 'error'));
+            .catch(() => mostrarNotificacao('Erro ao verificar documento', 'error'));
         });
     });
 
@@ -7253,14 +7253,14 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(r => r.json())
             .then(data => {
                 if (!data.success) {
-                    mostrarNotificacao(data.message || 'Erro ao aprovar resposta', 'error');
+                    mostrarNotificacao(data.message || 'Erro ao verificar resposta', 'error');
                     return;
                 }
                 const item = document.querySelector(`.resposta-item[data-resposta-id="${respostaId}"]`);
                 atualizarRespostaUI(item, 'aprovado');
-                mostrarNotificacao('Resposta aprovada com sucesso!', 'success');
+                mostrarNotificacao('Resposta verificada com sucesso!', 'success');
             })
-            .catch(() => mostrarNotificacao('Erro ao aprovar resposta', 'error'));
+            .catch(() => mostrarNotificacao('Erro ao verificar resposta', 'error'));
         });
     });
 

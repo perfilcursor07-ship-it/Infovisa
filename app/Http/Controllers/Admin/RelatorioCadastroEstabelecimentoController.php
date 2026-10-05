@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Estabelecimento;
 use App\Models\Municipio;
 use App\Models\UsuarioInterno;
+use App\Support\CnaeCatalogo;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -38,6 +39,7 @@ class RelatorioCadastroEstabelecimentoController extends Controller
         $indicadores = $this->indicadores($linhas);
         $graficoMensal = $this->graficoMensal($linhas, $filtros);
         $porMunicipio = $this->porMunicipio($linhas);
+        $porTipoServico = $this->porTipoServico($linhas);
 
         $listagem = $linhas
             ->when($filtros['situacao'], fn ($c) => $c->where('situacao', $filtros['situacao']))
@@ -50,8 +52,8 @@ class RelatorioCadastroEstabelecimentoController extends Controller
             : collect();
 
         return view('admin.relatorios.cadastro-estabelecimentos', compact(
-            'filtros', 'indicadores', 'graficoMensal', 'porMunicipio', 'estabelecimentos', 'municipios'
-        ) + ['totalListagem' => $listagem->count(), 'situacoes' => self::SITUACOES]);
+            'filtros', 'indicadores', 'graficoMensal', 'porMunicipio', 'porTipoServico', 'estabelecimentos', 'municipios'
+        ) + ['totalListagem' => $listagem->count(), 'situacoes' => self::SITUACOES, 'catalogoTipos' => CnaeCatalogo::tiposPorArea()]);
     }
 
     public function export(Request $request): StreamedResponse
@@ -68,7 +70,7 @@ class RelatorioCadastroEstabelecimentoController extends Controller
         return response()->streamDownload(function () use ($linhas) {
             $out = fopen('php://output', 'w');
             fwrite($out, "\xEF\xBB\xBF");
-            fputcsv($out, ['Estabelecimento', 'Razão social', 'CNPJ/CPF', 'Município', 'Competência', 'Setor', 'Situação', 'Situação na Receita', 'Cadastrado em', 'Status do cadastro', 'Motivo da desativação'], ';');
+            fputcsv($out, ['Estabelecimento', 'Razão social', 'CNPJ/CPF', 'Município', 'Tipo de serviço', 'Competência', 'Setor', 'Situação', 'Situação na Receita', 'Cadastrado em', 'Status do cadastro', 'Motivo da desativação'], ';');
 
             foreach ($linhas as $linha) {
                 $e = $linha['estabelecimento'];
@@ -77,6 +79,7 @@ class RelatorioCadastroEstabelecimentoController extends Controller
                     $e->razao_social,
                     $e->documento_formatado,
                     $linha['municipio'],
+                    CnaeCatalogo::nomeTipo($linha['tipo_servico']),
                     ucfirst($linha['competencia']),
                     $linha['setor'] === 'publico' ? 'Público' : 'Privado',
                     self::SITUACOES[$linha['situacao']],
@@ -126,8 +129,62 @@ class RelatorioCadastroEstabelecimentoController extends Controller
             'tipo_pessoa' => in_array($request->input('tipo_pessoa'), ['juridica', 'fisica'], true) ? $request->input('tipo_pessoa') : null,
             'cadastro' => $request->input('cadastro') === 'todos' ? 'todos' : 'aprovado',
             'situacao' => array_key_exists((string) $request->input('situacao'), self::SITUACOES) ? $request->input('situacao') : null,
+            'tipo_servico' => $this->tipoServicoValido((string) $request->input('tipo_servico')),
             'busca' => trim((string) $request->input('busca')),
         ];
+    }
+
+    /**
+     * Filtro de tipo de serviço: "area:saude", "tipo:hospitais" ou "outros"
+     */
+    private function tipoServicoValido(string $valor): ?string
+    {
+        if ($valor === 'outros') {
+            return $valor;
+        }
+        if (str_starts_with($valor, 'area:') && isset(CnaeCatalogo::AREAS[substr($valor, 5)])) {
+            return $valor;
+        }
+        if (str_starts_with($valor, 'tipo:') && isset(CnaeCatalogo::TIPOS[substr($valor, 5)])) {
+            return $valor;
+        }
+
+        return null;
+    }
+
+    private function correspondeTipoServico(array $linha, ?string $filtro): bool
+    {
+        return match (true) {
+            !$filtro => true,
+            $filtro === 'outros' => $linha['tipo_servico'] === null,
+            str_starts_with($filtro, 'area:') => $linha['area'] === substr($filtro, 5),
+            default => $linha['tipo_servico'] === substr($filtro, 5),
+        };
+    }
+
+    /**
+     * Tipo de serviço do estabelecimento pela atividade principal; se ela não estiver
+     * no catálogo, a primeira atividade exercida que estiver; senão "Outras atividades".
+     */
+    private function tipoServico(Estabelecimento $e): ?string
+    {
+        $atividades = collect($e->atividades_exercidas ?? [])
+            ->map(fn ($a) => is_array($a) ? $a : ['codigo' => $a])
+            ->reject(fn ($a) => in_array(strtoupper((string) ($a['codigo'] ?? '')), ['PROJ_ARQ', 'ANAL_ROT'], true));
+
+        $codigos = $atividades->sortByDesc(fn ($a) => !empty($a['principal']))
+            ->pluck('codigo')
+            ->prepend($atividades->isEmpty() ? $e->cnae_fiscal : null)
+            ->map(fn ($c) => preg_replace('/\D/', '', (string) $c))
+            ->filter();
+
+        foreach ($codigos as $codigo) {
+            if ($tipo = CnaeCatalogo::tipoDoCnae($codigo)) {
+                return $tipo;
+            }
+        }
+
+        return null;
     }
 
     private function data($valor): ?Carbon
@@ -188,6 +245,7 @@ class RelatorioCadastroEstabelecimentoController extends Controller
         return $query->get()
             ->map(fn (Estabelecimento $e) => $this->montarLinha($e))
             ->filter(fn ($linha) => $this->dentroDoEscopo($linha, $usuario, $filtros['competencia']))
+            ->filter(fn ($linha) => $this->correspondeTipoServico($linha, $filtros['tipo_servico']))
             ->values();
     }
 
@@ -232,6 +290,8 @@ class RelatorioCadastroEstabelecimentoController extends Controller
             'municipio' => $this->nomeMunicipio($e),
             'setor' => $tipoSetor === 'publico' ? 'publico' : 'privado',
             'situacao' => $this->situacao($e),
+            'tipo_servico' => $tipoServico = $this->tipoServico($e),
+            'area' => CnaeCatalogo::areaDoTipo($tipoServico),
         ];
     }
 
@@ -320,6 +380,40 @@ class RelatorioCadastroEstabelecimentoController extends Controller
             'media' => count($totais) ? round(array_sum($totais) / count($totais), 1) : 0,
             'pico' => count($totais) ? ['total' => max($totais), 'mes' => array_values($meses)[array_search(max($totais), $totais, true)]] : null,
         ];
+    }
+
+    /**
+     * Quantidade por tipo de serviço (e por área), com a situação de cada um
+     */
+    private function porTipoServico(Collection $linhas): array
+    {
+        $tipos = $linhas->groupBy(fn ($l) => $l['tipo_servico'] ?? 'outros')
+            ->map(fn ($grupo, $slug) => [
+                'slug' => $slug,
+                'filtro' => $slug === 'outros' ? 'outros' : 'tipo:' . $slug,
+                'nome' => $slug === 'outros' ? 'Outras atividades' : CnaeCatalogo::nomeTipo($slug),
+                'area' => $slug === 'outros' ? 'outros' : CnaeCatalogo::areaDoTipo($slug),
+                'total' => $grupo->count(),
+                'ativo' => $grupo->where('situacao', 'ativo')->count(),
+                'inativo' => $grupo->where('situacao', 'inativo')->count(),
+                'baixado' => $grupo->where('situacao', 'baixado')->count(),
+            ])
+            ->sortByDesc('total')
+            ->values();
+
+        $areas = collect(CnaeCatalogo::AREAS)
+            ->map(fn ($dados, $area) => [
+                'area' => $area,
+                'filtro' => 'area:' . $area,
+                'nome' => $dados['nome'],
+                'total' => $linhas->where('area', $area)->count(),
+            ])
+            ->push(['area' => 'outros', 'filtro' => 'outros', 'nome' => 'Outras atividades', 'total' => $linhas->whereNull('tipo_servico')->count()])
+            ->filter(fn ($a) => $a['total'] > 0)
+            ->sortByDesc('total')
+            ->values();
+
+        return ['tipos' => $tipos, 'areas' => $areas];
     }
 
     private function porMunicipio(Collection $linhas): Collection

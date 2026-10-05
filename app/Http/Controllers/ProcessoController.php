@@ -2154,7 +2154,7 @@ class ProcessoController extends Controller
         if (request()->expectsJson()) {
             return response()->json([
                 'success' => true,
-                'message' => $avisoCarimbo ?? 'Documento aprovado com sucesso!',
+                'message' => $avisoCarimbo ?? 'Documento verificado com sucesso!',
                 'aviso_carimbo' => $avisoCarimbo !== null,
             ]);
         }
@@ -2165,7 +2165,7 @@ class ProcessoController extends Controller
 
         return redirect()
             ->back()
-            ->with('success', 'Documento aprovado com sucesso!');
+            ->with('success', 'Documento verificado com sucesso!');
     }
 
     /**
@@ -3048,8 +3048,8 @@ TXT;
 
         $prazoFinalizadoAutomaticamente = $documento->finalizarPrazoAutomaticamenteSeItensAtendidos(auth('interno')->id());
         $mensagem = $prazoFinalizadoAutomaticamente
-            ? 'Resposta aprovada com sucesso! Todos os itens foram atendidos e o prazo foi encerrado automaticamente.'
-            : 'Resposta aprovada com sucesso!';
+            ? 'Resposta verificada com sucesso! Todos os itens foram atendidos e o prazo foi encerrado automaticamente.'
+            : 'Resposta verificada com sucesso!';
 
         // Retorna JSON se for requisição AJAX
         if (request()->expectsJson()) {
@@ -4787,7 +4787,7 @@ TXT;
         $maiorTempoDoc = (int) $docs->map(fn ($d) => $d['segundos_ate_aprovar'] ?? $d['segundos_na_situacao'] ?? 0)->max();
         $situacaoDoc = function ($d) use ($fmt) {
             return match (true) {
-                $d['status'] === 'aprovado' => ['chave' => 'aprovado', 'texto' => 'Aprovado'],
+                $d['status'] === 'aprovado' => ['chave' => 'aprovado', 'texto' => 'Verificado'],
                 $d['status'] === 'rejeitado' => ['chave' => 'rejeitado', 'texto' => 'Aguardando correção da empresa há ' . $fmt($d['segundos_na_situacao'])],
                 $d['status'] === 'pendente' => ['chave' => 'pendente', 'texto' => 'Aguardando análise da vigilância há ' . $fmt($d['segundos_na_situacao'])],
                 default => ['chave' => 'nao_enviado', 'texto' => 'Não enviado (' . $fmt($d['segundos_sem_envio']) . ' desde a abertura)'],

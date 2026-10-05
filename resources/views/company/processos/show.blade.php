@@ -110,7 +110,7 @@
         } elseif ($aguardandoAprovacao > 0) {
             $proximoPasso = ['tom' => 'amber', 'titulo' => 'Documentos em análise', 'texto' => 'Aguarde a Vigilância Sanitária. Você será avisado se algo precisar de ajuste.', 'acao' => null];
         } elseif ($todosAprovados) {
-            $proximoPasso = ['tom' => 'emerald', 'titulo' => 'Documentação aprovada', 'texto' => 'Acompanhe por aqui os próximos andamentos.', 'acao' => null];
+            $proximoPasso = ['tom' => 'emerald', 'titulo' => 'Documentação verificada', 'texto' => 'Acompanhe por aqui os próximos andamentos.', 'acao' => null];
         } else {
             $proximoPasso = ['tom' => 'blue', 'titulo' => 'Acompanhe seu processo', 'texto' => 'Envie arquivos, responda notificações e acompanhe a análise por aqui.', 'acao' => null];
         }
@@ -1135,7 +1135,7 @@
                         @if($totalObrigatorios == 0)
                         <p class="text-xs text-slate-500">Nenhum documento obrigatório configurado</p>
                         @elseif($todosAprovados)
-                        <p class="text-xs text-emerald-700 font-medium">Todos os documentos foram aprovados</p>
+                        <p class="text-xs text-emerald-700 font-medium">Todos os documentos foram verificados</p>
                         @elseif($todosEnviados && $aguardandoAprovacao > 0)
                         <p class="text-xs text-amber-700">Todos enviados · <span class="font-semibold">{{ $aguardandoAprovacao }}</span> aguardando aprovação</p>
                         @else
@@ -1169,7 +1169,7 @@
                 <div class="grid grid-cols-3 border-t border-slate-100 divide-x divide-slate-100 text-center">
                     <div class="py-2">
                         <p class="text-sm font-semibold text-slate-900 tabular-nums">{{ $documentosAprovados->count() }}</p>
-                        <p class="text-[10px] text-slate-500">Aprovados</p>
+                        <p class="text-[10px] text-slate-500">Verificados</p>
                     </div>
                     <div class="py-2">
                         <p id="pendentes-count-resumo" class="text-sm font-semibold text-amber-600 tabular-nums">{{ $documentosPendentes->count() }}</p>

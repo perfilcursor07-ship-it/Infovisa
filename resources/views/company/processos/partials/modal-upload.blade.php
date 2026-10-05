@@ -493,7 +493,7 @@
                                                 <span class="px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 rounded">Aguardando Aprovação</span>
                                             </template>
                                             @elseif($isAprovado)
-                                            <span class="px-1.5 py-0.5 text-[10px] font-medium bg-green-100 text-green-700 rounded">Aprovado</span>
+                                            <span class="px-1.5 py-0.5 text-[10px] font-medium bg-green-100 text-green-700 rounded">Verificado</span>
                                             @elseif($isRejeitado)
                                             <template x-if="!documentosEnviados[{{ $doc['id'] }}]">
                                                 <span class="px-1.5 py-0.5 text-[10px] font-medium bg-red-100 text-red-700 rounded">Rejeitado - Reenvie</span>
@@ -743,7 +743,7 @@
                                                         <span class="px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 rounded">Aguardando Aprovação</span>
                                                     </template>
                                                     @elseif($isAprovado)
-                                                    <span class="px-1.5 py-0.5 text-[10px] font-medium bg-green-100 text-green-700 rounded">Aprovado</span>
+                                                    <span class="px-1.5 py-0.5 text-[10px] font-medium bg-green-100 text-green-700 rounded">Verificado</span>
                                                     @elseif($isRejeitado)
                                                     <template x-if="!documentosEnviados['{{ $docKey }}']">
                                                         <span class="px-1.5 py-0.5 text-[10px] font-medium bg-red-100 text-red-700 rounded">Rejeitado - Reenvie</span>

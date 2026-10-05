@@ -32,6 +32,7 @@
         'municipio_id' => 'M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z M15 11a3 3 0 11-6 0 3 3 0 016 0z',
         'setor' => 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4',
         'tipo_pessoa' => 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z',
+        'tipo_servico' => 'M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z',
         'cadastro' => 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z',
     ];
     $pilulas = [];
@@ -43,6 +44,17 @@
         $pilulas[] = ['nome' => 'municipio_id', 'rotulo' => 'Município', 'valor' => (string) $filtros['municipio_id'], 'padrao' => '', 'mostrarPadrao' => false, 'busca' => true,
                       'opcoes' => ['' => 'Todos os municípios'] + $municipios->mapWithKeys(fn ($m) => [(string) $m->id => $m->nome])->all()];
     }
+    // Tipo de serviço: área inteira ou tipo específico (agrupado por área)
+    $opcoesTipoServico = ['' => 'Todos os tipos de serviço'];
+    foreach ($catalogoTipos as $area => $dadosArea) {
+        $opcoesTipoServico['area:' . $area] = ['rotulo' => $dadosArea['nome'], 'grupo' => true];
+        foreach ($dadosArea['tipos'] as $slug => $nomeTipo) {
+            $opcoesTipoServico['tipo:' . $slug] = ['rotulo' => $nomeTipo, 'recuo' => true];
+        }
+    }
+    $opcoesTipoServico['outros'] = 'Outras atividades';
+    $pilulas[] = ['nome' => 'tipo_servico', 'rotulo' => 'Tipo de serviço', 'valor' => (string) $filtros['tipo_servico'], 'padrao' => '', 'mostrarPadrao' => false, 'busca' => true, 'largo' => true,
+                  'opcoes' => $opcoesTipoServico];
     $pilulas[] = ['nome' => 'tipo_pessoa', 'rotulo' => 'Pessoa', 'valor' => (string) $filtros['tipo_pessoa'], 'padrao' => '', 'mostrarPadrao' => false,
                   'opcoes' => ['' => 'Jurídica e física', 'juridica' => 'Jurídica (CNPJ)', 'fisica' => 'Física (CPF)']];
     $pilulas[] = ['nome' => 'setor', 'rotulo' => 'Setor', 'valor' => (string) $filtros['setor'], 'padrao' => '', 'mostrarPadrao' => false,
@@ -152,7 +164,9 @@
                 @foreach($pilulas as $p)
                     @php
                         $ativo = $p['valor'] !== $p['padrao'];
-                        $textoPilula = ($ativo || $p['mostrarPadrao']) ? $p['rotulo'] . ': ' . ($p['opcoes'][$p['valor']] ?? $p['valor']) : $p['rotulo'];
+                        $opcaoAtual = $p['opcoes'][$p['valor']] ?? $p['valor'];
+                        $rotuloAtual = is_array($opcaoAtual) ? $opcaoAtual['rotulo'] . (!empty($opcaoAtual['grupo']) ? ' (toda a área)' : '') : $opcaoAtual;
+                        $textoPilula = ($ativo || $p['mostrarPadrao']) ? $p['rotulo'] . ': ' . $rotuloAtual : $p['rotulo'];
                     @endphp
                     <div class="relative" @click.outside="if (aberto === '{{ $p['nome'] }}') aberto = null">
                         <div class="inline-flex items-center rounded-lg text-xs font-semibold ring-1 ring-inset transition {{ $ativo ? 'bg-blue-50 text-blue-700 ring-blue-200' : 'bg-white text-slate-600 ring-slate-200 hover:bg-slate-50' }}">
@@ -170,7 +184,7 @@
                             @endif
                         </div>
                         <div x-show="aberto === '{{ $p['nome'] }}'" x-cloak x-transition.origin.top.left
-                             class="absolute left-0 top-full mt-1.5 z-30 {{ !empty($p['busca']) ? 'w-72' : 'w-56' }} max-w-[calc(100vw-2rem)] bg-white rounded-xl border border-slate-200 shadow-xl shadow-slate-900/10 overflow-hidden">
+                             class="absolute left-0 top-full mt-1.5 z-30 {{ !empty($p['largo']) ? 'w-96' : (!empty($p['busca']) ? 'w-72' : 'w-56') }} max-w-[calc(100vw-2rem)] bg-white rounded-xl border border-slate-200 shadow-xl shadow-slate-900/10 overflow-hidden">
                             <p class="px-3 pt-2.5 pb-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">{{ $p['rotulo'] }}</p>
                             @if(!empty($p['busca']))
                                 <div class="px-2 pb-2">
@@ -180,12 +194,18 @@
                                 </div>
                             @endif
                             <div class="max-h-64 overflow-y-auto pb-1">
-                                @foreach($p['opcoes'] as $valorOpcao => $rotuloOpcao)
-                                    @php $selecionada = (string) $valorOpcao === $p['valor']; @endphp
+                                @foreach($p['opcoes'] as $valorOpcao => $opcao)
+                                    @php
+                                        $selecionada = (string) $valorOpcao === $p['valor'];
+                                        $rotuloOpcao = is_array($opcao) ? $opcao['rotulo'] : $opcao;
+                                        $ehGrupo = is_array($opcao) && !empty($opcao['grupo']);
+                                        $recuo = is_array($opcao) && !empty($opcao['recuo']);
+                                    @endphp
                                     <button type="button" data-opcao @click="definir('{{ $p['nome'] }}', @js((string) $valorOpcao))"
                                             @if(!empty($p['busca'])) x-show="!termo || norm(@js($rotuloOpcao)).includes(norm(termo))" @endif
-                                            class="w-full flex items-center justify-between gap-2 px-3 py-1.5 text-sm text-left transition {{ $selecionada ? 'text-blue-700 font-semibold bg-blue-50/60' : 'text-slate-700 hover:bg-slate-50' }}">
-                                        <span class="truncate">{{ $rotuloOpcao }}</span>
+                                            class="w-full flex items-center justify-between gap-2 {{ $recuo ? 'pl-6 pr-3' : 'px-3' }} {{ $ehGrupo ? 'pt-2.5 pb-1 text-[11px] uppercase tracking-wide font-bold border-t border-slate-100' : 'py-1.5 text-sm' }} text-left transition {{ $selecionada ? 'text-blue-700 font-semibold bg-blue-50/60' : ($ehGrupo ? 'text-slate-500 hover:text-blue-700 hover:bg-slate-50' : 'text-slate-700 hover:bg-slate-50') }}"
+                                            @if($ehGrupo) title="Filtrar por toda a área" @endif>
+                                        <span class="truncate">{{ $rotuloOpcao }}@if($ehGrupo) <span class="normal-case font-medium text-slate-400">· toda a área</span>@endif</span>
                                         @if($selecionada)
                                             <svg class="w-4 h-4 flex-shrink-0 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
                                         @endif
@@ -293,6 +313,79 @@
         @endunless
     </div>
 
+    {{-- Por tipo de serviço --}}
+    @php
+        $coresArea = [
+            'saude' => ['hex' => '#e11d48', 'chip' => 'bg-rose-50 text-rose-700 ring-rose-200'],
+            'produtos_saude' => ['hex' => '#7c3aed', 'chip' => 'bg-violet-50 text-violet-700 ring-violet-200'],
+            'alimentos' => ['hex' => '#d97706', 'chip' => 'bg-amber-50 text-amber-800 ring-amber-200'],
+            'interesse_saude' => ['hex' => '#0284c7', 'chip' => 'bg-sky-50 text-sky-700 ring-sky-200'],
+            'ambiente' => ['hex' => '#059669', 'chip' => 'bg-emerald-50 text-emerald-700 ring-emerald-200'],
+            'outros' => ['hex' => '#94a3b8', 'chip' => 'bg-slate-100 text-slate-700 ring-slate-200'],
+        ];
+        $tiposGrafico = $porTipoServico['tipos']->take(15);
+        $maiorArea = max(1, (int) ($porTipoServico['areas']->first()['total'] ?? 1));
+        $dadosGraficoTipos = $tiposGrafico->map(fn ($t) => [
+            'nome' => $t['nome'],
+            'total' => $t['total'],
+            'ativo' => $t['ativo'],
+            'inativo' => $t['inativo'],
+            'baixado' => $t['baixado'],
+            'cor' => $coresArea[$t['area']]['hex'] ?? '#94a3b8',
+            'url' => $url(['tipo_servico' => $t['filtro']]) . '#lista',
+        ])->values();
+    @endphp
+    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5">
+        <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-2 mb-4">
+            <div>
+                <h3 class="text-sm font-semibold text-slate-900">Por tipo de serviço</h3>
+                <p class="text-[11px] text-slate-500">Classificado pela atividade principal do estabelecimento · clique para filtrar</p>
+            </div>
+            @if($filtros['tipo_servico'])
+                <a href="{{ $url(['tipo_servico' => null]) }}" class="self-start inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition">
+                    Ver todos os tipos
+                </a>
+            @endif
+        </div>
+
+        @if($indicadores['total'] === 0)
+            <div class="h-40 flex items-center justify-center text-sm text-slate-400">Nenhum cadastro no período</div>
+        @else
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+            {{-- Áreas --}}
+            <div class="space-y-2">
+                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Por área</p>
+                @foreach($porTipoServico['areas'] as $area)
+                    @php $areaAtiva = $filtros['tipo_servico'] === $area['filtro']; @endphp
+                    <a href="{{ $url(['tipo_servico' => $areaAtiva ? null : $area['filtro']]) }}#lista"
+                       class="block rounded-xl px-3 py-2 ring-1 ring-inset transition {{ $areaAtiva ? 'ring-blue-300 bg-blue-50' : 'ring-slate-200 hover:bg-slate-50' }}">
+                        <div class="flex items-center justify-between gap-2 text-xs">
+                            <span class="inline-flex items-center gap-2 font-semibold text-slate-700 min-w-0">
+                                <span class="w-2.5 h-2.5 rounded-sm flex-shrink-0" style="background: {{ $coresArea[$area['area']]['hex'] }}"></span>
+                                <span class="truncate">{{ $area['nome'] }}</span>
+                            </span>
+                            <span class="font-bold text-slate-900 tabular-nums">{{ $fmt($area['total']) }}
+                                <span class="font-medium text-slate-400">· {{ $indicadores['total'] ? round($area['total'] / $indicadores['total'] * 100) : 0 }}%</span>
+                            </span>
+                        </div>
+                        <div class="mt-1.5 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                            <div class="h-full rounded-full" style="width: {{ $area['total'] / $maiorArea * 100 }}%; background: {{ $coresArea[$area['area']]['hex'] }}"></div>
+                        </div>
+                    </a>
+                @endforeach
+            </div>
+
+            {{-- Tipos --}}
+            <div class="lg:col-span-2">
+                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                    Por tipo {{ $porTipoServico['tipos']->count() > 15 ? '(15 mais frequentes)' : '' }}
+                </p>
+                <div style="height: {{ max(180, $tiposGrafico->count() * 30 + 40) }}px"><canvas id="chartTiposServico"></canvas></div>
+            </div>
+        </div>
+        @endif
+    </div>
+
     {{-- Lista --}}
     <div id="lista" class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden scroll-mt-4">
         <div class="px-5 pt-4 border-b border-slate-100">
@@ -336,7 +429,10 @@
                                     <a href="{{ route('admin.estabelecimentos.show', $e->id) }}" class="font-semibold text-slate-900 hover:text-blue-700">
                                         {{ $e->nome_fantasia ?: ($e->razao_social ?: $e->nome_completo) }}
                                     </a>
-                                    <p class="text-[11px] text-slate-500 tabular-nums mt-0.5">{{ $e->documento_formatado }}</p>
+                                    <p class="text-[11px] text-slate-500 tabular-nums mt-0.5">
+                                        {{ $e->documento_formatado }}
+                                        · <span class="font-medium" style="color: {{ $coresArea[$linha['area'] ?? 'outros']['hex'] }}">{{ \App\Support\CnaeCatalogo::nomeTipo($linha['tipo_servico']) }}</span>
+                                    </p>
                                     <div class="flex flex-wrap gap-1.5 mt-1.5">
                                         <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold {{ $linha['competencia'] === 'estadual' ? 'bg-blue-50 text-blue-700' : 'bg-emerald-50 text-emerald-700' }}">{{ ucfirst($linha['competencia']) }}</span>
                                         <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold {{ $linha['setor'] === 'publico' ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-100 text-slate-600' }}">{{ $linha['setor'] === 'publico' ? 'Público' : 'Privado' }}</span>
@@ -429,6 +525,55 @@
             scales: {
                 x: { stacked: true, grid: { display: false }, border: { display: false } },
                 y: { stacked: true, beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#eef2f6', drawTicks: false }, border: { display: false } },
+            },
+        },
+    });
+})();
+
+// ---- Por tipo de serviço (barras horizontais, cor da área; clique filtra) ----
+(function () {
+    const el = document.getElementById('chartTiposServico');
+    if (!el || typeof Chart === 'undefined') return;
+
+    const tipos = @json($dadosGraficoTipos ?? []);
+    const num = n => Number(n || 0).toLocaleString('pt-BR');
+
+    new Chart(el, {
+        type: 'bar',
+        data: {
+            labels: tipos.map(t => t.nome),
+            datasets: [{
+                label: 'Estabelecimentos',
+                data: tipos.map(t => t.total),
+                backgroundColor: tipos.map(t => t.cor),
+                borderRadius: 4,
+                borderSkipped: false,
+                maxBarThickness: 20,
+            }],
+        },
+        options: {
+            indexAxis: 'y',
+            maintainAspectRatio: false,
+            onClick: (evento, elementos) => { if (elementos.length) window.location.href = tipos[elementos[0].index].url; },
+            onHover: (evento, elementos) => { evento.native.target.style.cursor = elementos.length ? 'pointer' : 'default'; },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: '#0f172a', titleColor: '#fff', bodyColor: '#e2e8f0', footerColor: '#94a3b8',
+                    padding: 10, cornerRadius: 8,
+                    callbacks: {
+                        label: ctx => ` ${num(ctx.parsed.x)} estabelecimento(s)`,
+                        afterLabel: ctx => {
+                            const t = tipos[ctx.dataIndex];
+                            return ` ${num(t.ativo)} ativos · ${num(t.inativo)} inativos · ${num(t.baixado)} baixados`;
+                        },
+                        footer: () => 'Clique para filtrar',
+                    },
+                },
+            },
+            scales: {
+                x: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#eef2f6', drawTicks: false }, border: { display: false } },
+                y: { grid: { display: false }, border: { display: false }, ticks: { color: '#334155', font: { size: 11 } } },
             },
         },
     });

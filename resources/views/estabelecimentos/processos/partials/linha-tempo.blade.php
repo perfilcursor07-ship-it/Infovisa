@@ -57,13 +57,13 @@
                                     <p class="mt-0.5 text-lg font-bold text-slate-900" x-text="dados.resumo.media_aprovacao ?? '—'"></p>
                                     <p class="text-[11px] text-slate-400 truncate"
                                        :title="dados.resumo.maior_aprovacao ? 'Mais demorado: ' + dados.resumo.maior_aprovacao : ''"
-                                       x-text="dados.resumo.media_aprovacao ? 'média do envio à aprovação' : 'nenhum aprovado ainda'"></p>
+                                       x-text="dados.resumo.media_aprovacao ? 'média do envio à verificação' : 'nenhum verificado ainda'"></p>
                                 </div>
                                 <div class="rounded-xl border border-slate-200 p-3">
                                     <p class="text-[11px] font-medium text-slate-500">Documentos obrigatórios</p>
                                     <p class="mt-0.5 text-lg font-bold text-slate-900">
                                         <span x-text="dados.resumo.docs_aprovados"></span><span class="text-slate-400 font-semibold" x-text="'/' + dados.resumo.docs_total"></span>
-                                        <span class="text-xs font-medium text-slate-500">aprovados</span>
+                                        <span class="text-xs font-medium text-slate-500">verificados</span>
                                     </p>
                                     {{-- mini gráfico: aprovados / enviados / faltando --}}
                                     <div class="mt-1 flex h-1.5 rounded-full overflow-hidden bg-slate-100" x-show="dados.resumo.docs_total > 0">
@@ -140,7 +140,7 @@
                                                         <span>Enviado em <strong class="font-medium text-slate-700" x-text="doc.enviado"></strong> <span class="text-slate-400" x-text="'(' + doc.apos_abertura + ' após a abertura)'"></span></span>
                                                     </template>
                                                     <template x-if="doc.aprovado">
-                                                        <span> · Aprovado em <strong class="font-medium text-slate-700" x-text="doc.aprovado"></strong></span>
+                                                        <span> · Verificado em <strong class="font-medium text-slate-700" x-text="doc.aprovado"></strong></span>
                                                     </template>
                                                     <template x-if="!doc.aprovado">
                                                         <span :class="corDoc(doc.situacao.chave).texto" x-text="(doc.enviado ? ' · ' : '') + doc.situacao.texto"></span>
