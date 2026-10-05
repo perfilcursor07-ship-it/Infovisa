@@ -23,6 +23,8 @@ class TipoDocumento extends Model
         'tipo_prazo_analise',
         'abrir_processo_automaticamente',
         'tipo_processo_codigo',
+        'escopo_processos',
+        'tipos_processo_permitidos',
     ];
 
     protected $casts = [
@@ -32,6 +34,7 @@ class TipoDocumento extends Model
         'permite_resposta' => 'boolean',
         'exige_itens_atendimento' => 'boolean',
         'abrir_processo_automaticamente' => 'boolean',
+        'tipos_processo_permitidos' => 'array',
         'prazo_padrao_dias' => 'integer',
         'prazo_analise_dias' => 'integer',
         'created_at' => 'datetime',
@@ -74,6 +77,49 @@ class TipoDocumento extends Model
             ->withPivot('obrigatorio', 'ordem')
             ->withTimestamps()
             ->orderByPivot('ordem');
+    }
+
+    /**
+     * Indica se o tipo pode ser usado ao criar documento dentro de um processo do tipo informado.
+     * Sem processo ($codigoTipoProcesso nulo), o tipo está sempre disponível.
+     */
+    public function disponivelParaTipoProcesso(?string $codigoTipoProcesso): bool
+    {
+        if ($codigoTipoProcesso === null || $codigoTipoProcesso === '') {
+            return true;
+        }
+
+        return match ($this->escopo_processos ?? 'todos') {
+            'nenhum' => false,
+            'especificos' => in_array($codigoTipoProcesso, $this->tipos_processo_permitidos ?? [], true),
+            default => true,
+        };
+    }
+
+    /**
+     * Disponível para TODOS os tipos de processo informados (criação em lote em vários processos)
+     */
+    public function disponivelParaTiposProcesso(iterable $codigosTipoProcesso): bool
+    {
+        foreach ($codigosTipoProcesso as $codigo) {
+            if (!$this->disponivelParaTipoProcesso($codigo)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Texto curto do escopo, para listagens
+     */
+    public function getEscopoProcessosDescricaoAttribute(): string
+    {
+        return match ($this->escopo_processos ?? 'todos') {
+            'nenhum' => 'Nenhum processo',
+            'especificos' => TipoProcesso::whereIn('codigo', $this->tipos_processo_permitidos ?? [])->orderBy('nome')->pluck('nome')->implode(', ') ?: 'Nenhum tipo selecionado',
+            default => 'Todos os processos',
+        };
     }
 
     /**

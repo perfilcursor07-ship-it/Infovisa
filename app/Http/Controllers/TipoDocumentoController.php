@@ -156,6 +156,24 @@ class TipoDocumentoController extends Controller
     }
 
     /**
+     * Em quais tipos de processo o documento aparece: "todos" (padrão), "especificos" ou "nenhum".
+     */
+    private function normalizarEscopoProcessos(array &$validated): void
+    {
+        $escopo = $validated['escopo_processos'] ?? 'todos';
+        $tipos = array_values(array_unique($validated['tipos_processo_permitidos'] ?? []));
+
+        if ($escopo === 'especificos' && empty($tipos)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'tipos_processo_permitidos' => 'Selecione pelo menos um tipo de processo ou escolha "Todos os processos".',
+            ]);
+        }
+
+        $validated['escopo_processos'] = $escopo;
+        $validated['tipos_processo_permitidos'] = $escopo === 'especificos' ? $tipos : null;
+    }
+
+    /**
      * Exibe o formulário de criação
      */
     public function create()
@@ -184,7 +202,12 @@ class TipoDocumentoController extends Controller
             'exige_itens_atendimento' => 'boolean',
             'abrir_processo_automaticamente' => 'boolean',
             'tipo_processo_codigo' => 'nullable|string|max:255',
+            'escopo_processos' => 'nullable|in:todos,especificos,nenhum',
+            'tipos_processo_permitidos' => 'nullable|array',
+            'tipos_processo_permitidos.*' => 'string|exists:tipo_processos,codigo',
         ], $this->regrasSubcategorias()));
+
+        $this->normalizarEscopoProcessos($validated);
 
         // Se tem_prazo está desmarcado, limpa o prazo_padrao_dias e prazo_notificacao
         if (!$request->has('tem_prazo')) {
@@ -261,7 +284,12 @@ class TipoDocumentoController extends Controller
             'exige_itens_atendimento' => 'boolean',
             'abrir_processo_automaticamente' => 'boolean',
             'tipo_processo_codigo' => 'nullable|string|max:255',
+            'escopo_processos' => 'nullable|in:todos,especificos,nenhum',
+            'tipos_processo_permitidos' => 'nullable|array',
+            'tipos_processo_permitidos.*' => 'string|exists:tipo_processos,codigo',
         ], $this->regrasSubcategorias()));
+
+        $this->normalizarEscopoProcessos($validated);
 
         // Se tem_prazo está desmarcado, limpa o prazo_padrao_dias e prazo_notificacao
         if (!$request->has('tem_prazo')) {

@@ -140,6 +140,13 @@
                     @if($tipo->descricao)
                     <p class="text-[11px] text-gray-400 truncate">{{ Str::limit($tipo->descricao, 50) }}</p>
                     @endif
+                    @php $nomesTiposProcesso ??= \App\Models\TipoProcesso::pluck('nome', 'codigo'); @endphp
+                    @if(($tipo->escopo_processos ?? 'todos') === 'nenhum')
+                    <p class="text-[11px] text-sky-700 truncate" title="Não aparece ao criar documento dentro de processos">📁 Não aparece em processos</p>
+                    @elseif(($tipo->escopo_processos ?? 'todos') === 'especificos')
+                    @php $nomesEscopo = collect($tipo->tipos_processo_permitidos ?? [])->map(fn ($c) => $nomesTiposProcesso[$c] ?? $c)->implode(', '); @endphp
+                    <p class="text-[11px] text-sky-700 truncate" title="Aparece somente em: {{ $nomesEscopo }}">📁 Somente em: {{ $nomesEscopo }}</p>
+                    @endif
                 </div>
                 {{-- Código --}}
                 <div class="col-span-2">

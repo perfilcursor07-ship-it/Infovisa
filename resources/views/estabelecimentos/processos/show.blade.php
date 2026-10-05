@@ -2621,7 +2621,6 @@
                                     class="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm bg-white">
                                 <option value="" disabled selected>Selecione o tipo de documento</option>
                                 <option value="Termo de Vistoria">Termo de Vistoria</option>
-                                <option value="Auto de Infração">Auto de Infração</option>
                                 <option value="Notificação">Notificação</option>
                                 <option value="Usar nome do arquivo">Usar nome do arquivo PDF</option>
                             </select>

@@ -121,6 +121,8 @@
                 <input type="hidden" name="visibilidade" value="todos">
                 @endif
 
+                @include('configuracoes.tipos-documento.partials.escopo-processos', ['tipoDocumento' => $tipoDocumento ?? null])
+
                 {{-- Descrição --}}
                 <div>
                     <label for="descricao" class="block text-sm font-medium text-gray-700 mb-2">

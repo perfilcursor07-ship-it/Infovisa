@@ -238,6 +238,9 @@ class DocumentoDigitalController extends Controller
             }
         }
 
+        // Só os tipos de documento configurados para o(s) tipo(s) de processo selecionado(s)
+        $tiposDocumento = $this->filtrarTiposPorProcessos($tiposDocumento, $processosSelecionados->pluck('tipo'));
+
         $processosSemUsuarioExterno = $this->filtrarProcessosSemUsuarioExterno($processosSelecionados);
         $processosSemUsuarioExternoCount = $processosSemUsuarioExterno->count();
 
@@ -287,6 +290,32 @@ class DocumentoDigitalController extends Controller
     /**
      * Exibe formulário para criar documento FÍSICO (auto entregue em loco)
      */
+    /**
+     * Mantém só os tipos de documento configurados para os tipos de processo informados
+     * (TipoDocumento::escopo_processos). Sem processo, a lista não muda.
+     */
+    private function filtrarTiposPorProcessos($tiposDocumento, iterable $codigosTipoProcesso, ?int $manterTipoId = null)
+    {
+        $codigos = collect($codigosTipoProcesso)->filter()->unique()->values();
+        if ($codigos->isEmpty()) {
+            return $tiposDocumento;
+        }
+
+        return $tiposDocumento
+            ->filter(fn ($tipo) => $tipo->id === $manterTipoId || $tipo->disponivelParaTiposProcesso($codigos))
+            ->values();
+    }
+
+    private function validarTipoDocumentoParaProcessos(TipoDocumento $tipoDocumento, iterable $codigosTipoProcesso): void
+    {
+        $codigos = collect($codigosTipoProcesso)->filter()->unique()->values();
+        if ($codigos->isNotEmpty() && !$tipoDocumento->disponivelParaTiposProcesso($codigos)) {
+            throw ValidationException::withMessages([
+                'tipo_documento_id' => "O tipo de documento \"{$tipoDocumento->nome}\" não está disponível para este tipo de processo.",
+            ]);
+        }
+    }
+
     public function createFisico(Request $request)
     {
         $usuarioLogado = auth('interno')->user();
@@ -316,6 +345,9 @@ class DocumentoDigitalController extends Controller
         if ($processoId) {
             $processo = \App\Models\Processo::with('estabelecimento')->find($processoId);
         }
+
+        // Só os tipos de documento configurados para o tipo do processo
+        $tiposDocumento = $this->filtrarTiposPorProcessos($tiposDocumento, [$processo?->tipo]);
 
         // Pastas do processo
         $pastasProcesso = collect();
@@ -358,6 +390,7 @@ class DocumentoDigitalController extends Controller
             $processo = null;
             if ($request->processo_id) {
                 $processo = \App\Models\Processo::find($request->processo_id);
+                $this->validarTipoDocumentoParaProcessos($tipoDocumento, [$processo?->tipo]);
             } elseif ($request->estabelecimento_id && $tipoDocumento->abrir_processo_automaticamente) {
                 // Se o tipo de documento abre processo automaticamente, cria o processo
                 $estabelecimento = \App\Models\Estabelecimento::findOrFail($request->estabelecimento_id);
@@ -618,6 +651,13 @@ class DocumentoDigitalController extends Controller
         }
 
         $processosIds = $this->ajustarProcessosIdsParaAtividadeOs($request, $processosIds);
+
+        if ($processosIds->isNotEmpty()) {
+            $this->validarTipoDocumentoParaProcessos(
+                $tipoDocumento,
+                \App\Models\Processo::whereIn('id', $processosIds)->pluck('tipo')
+            );
+        }
 
         $pastaId = null;
         if ($request->filled('pasta_id')) {
@@ -1212,11 +1252,19 @@ class DocumentoDigitalController extends Controller
                 ->with('error', 'Este documento já possui assinaturas e não pode mais ser editado.');
         }
 
-        $tiposDocumento = TipoDocumento::ativo()->visivelParaUsuario()->orderBy('nome')->get();
-        
         $usuarioLogado = auth('interno')->user();
         $usuariosInternos = UsuarioInterno::paraSelecaoAssinantes($usuarioLogado)->ordenado()->get();
         $processo = $documento->processo;
+
+        // Só os tipos configurados para o tipo do processo (o tipo atual do documento sempre aparece)
+        $codigosTipoProcesso = $documento->isLote()
+            ? \App\Models\Processo::whereIn('id', $documento->processos_ids ?? [])->pluck('tipo')
+            : [$processo?->tipo];
+        $tiposDocumento = $this->filtrarTiposPorProcessos(
+            TipoDocumento::ativo()->visivelParaUsuario()->orderBy('nome')->get(),
+            $codigosTipoProcesso,
+            $documento->tipo_documento_id
+        );
 
         $pastasProcesso = collect();
         if ($processo && !$documento->isLote()) {
