@@ -1184,7 +1184,10 @@ class ProcessoController extends Controller
         $podeVincularDocObrigatorio = auth('interno')->user()->isAdmin()
             || ($tipoProcessoTemUnidades && in_array($usuarioLogadoNivel, ['gestor_estadual', 'tecnico_estadual']));
 
-        return view('estabelecimentos.processos.show', compact('estabelecimento', 'processo', 'modelosDocumento', 'documentosDigitais', 'todosDocumentos', 'designacoes', 'alertas', 'documentosObrigatorios', 'documentosObrigatoriosPorUnidade', 'avisoFilaPublica', 'avisoFilaPublicaPorUnidade', 'tipoProcessoTemUnidades', 'unidadesDisponiveis', 'podeVincularDocObrigatorio'));
+        // Somente administradores podem mover arquivos/documentos para outro processo
+        $podeMoverEntreProcessos = auth('interno')->user()->isAdmin();
+
+        return view('estabelecimentos.processos.show', compact('estabelecimento', 'processo', 'modelosDocumento', 'documentosDigitais', 'todosDocumentos', 'designacoes', 'alertas', 'documentosObrigatorios', 'documentosObrigatoriosPorUnidade', 'avisoFilaPublica', 'avisoFilaPublicaPorUnidade', 'tipoProcessoTemUnidades', 'unidadesDisponiveis', 'podeVincularDocObrigatorio', 'podeMoverEntreProcessos'));
     }
 
     /**
@@ -2273,6 +2276,251 @@ class ProcessoController extends Controller
         return redirect()
             ->back()
             ->with('success', 'Documento vinculado ao documento obrigatório com sucesso!');
+    }
+
+    /**
+     * Lista os processos do mesmo estabelecimento aptos a receber itens movidos.
+     * Somente processos abertos e diferentes do processo de origem.
+     */
+    public function processosDestinoParaMover($estabelecimentoId, $processoId)
+    {
+        $usuario = auth('interno')->user();
+
+        if (!$usuario || !$usuario->isAdmin()) {
+            abort(403, 'Apenas administradores podem mover itens entre processos.');
+        }
+
+        $origem = Processo::where('estabelecimento_id', $estabelecimentoId)->findOrFail($processoId);
+
+        $processos = Processo::where('estabelecimento_id', $origem->estabelecimento_id)
+            ->where('id', '!=', $origem->id)
+            ->where('status', 'aberto')
+            ->orderBy('ano', 'desc')
+            ->orderBy('numero_sequencial', 'desc')
+            ->get()
+            ->map(function ($p) use ($origem) {
+                return [
+                    'id' => $p->id,
+                    'numero_processo' => $p->numero_processo,
+                    'tipo' => $p->tipo,
+                    'tipo_nome' => $p->tipo_nome,
+                    'aberto_em' => $p->created_at?->format('d/m/Y'),
+                    'mesmo_tipo' => $p->tipo === $origem->tipo,
+                ];
+            })
+            ->values();
+
+        return response()->json([
+            'success' => true,
+            'processos' => $processos,
+        ]);
+    }
+
+    /**
+     * Move um arquivo ou documento digital para outro processo do mesmo estabelecimento.
+     *
+     * Regras:
+     * - Somente administradores;
+     * - O processo de destino precisa pertencer ao mesmo estabelecimento e estar aberto;
+     * - Os dados do item são preservados (assinaturas, respostas, prazos, histórico);
+     * - A pasta é zerada, pois as pastas pertencem ao processo de origem;
+     * - O vínculo com documento obrigatório é desfeito quando incompatível com o destino.
+     */
+    public function moverItemParaProcesso(Request $request, $estabelecimentoId, $processoId)
+    {
+        $usuario = auth('interno')->user();
+
+        if (!$usuario || !$usuario->isAdmin()) {
+            abort(403, 'Apenas administradores podem mover itens entre processos.');
+        }
+
+        $validated = $request->validate([
+            'tipo' => 'required|in:documento,arquivo',
+            'item_id' => 'required|integer',
+            'processo_destino_id' => 'required|integer',
+            'motivo' => 'nullable|string|max:500',
+        ]);
+
+        $origem = Processo::where('estabelecimento_id', $estabelecimentoId)->findOrFail($processoId);
+
+        $destino = Processo::where('estabelecimento_id', $origem->estabelecimento_id)
+            ->where('id', '!=', $origem->id)
+            ->find($validated['processo_destino_id']);
+
+        if (!$destino) {
+            return response()->json([
+                'success' => false,
+                'message' => 'O processo de destino não foi encontrado neste estabelecimento.',
+            ], 422);
+        }
+
+        if ($destino->status !== 'aberto') {
+            return response()->json([
+                'success' => false,
+                'message' => 'O processo de destino precisa estar aberto para receber documentos.',
+            ], 422);
+        }
+
+        try {
+            $resultado = DB::transaction(function () use ($validated, $origem, $destino) {
+                return $validated['tipo'] === 'documento'
+                    ? $this->moverDocumentoDigitalParaProcesso((int) $validated['item_id'], $origem, $destino)
+                    : $this->moverArquivoParaProcesso((int) $validated['item_id'], $origem, $destino);
+            });
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'O item não foi encontrado neste processo.',
+            ], 404);
+        } catch (\RuntimeException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+
+        $this->registrarEventosMovimentacao($origem, $destino, $resultado, $validated['motivo'] ?? null, $usuario);
+
+        return response()->json([
+            'success' => true,
+            'message' => $resultado['rotulo'] . ' movido para o processo ' . $destino->numero_processo . '.',
+            'processo_destino' => [
+                'id' => $destino->id,
+                'numero_processo' => $destino->numero_processo,
+                'url' => route('admin.estabelecimentos.processos.show', [$destino->estabelecimento_id, $destino->id]),
+            ],
+            'avisos' => $resultado['avisos'],
+        ]);
+    }
+
+    /**
+     * Move um documento digital preservando assinaturas, respostas, prazos e visualizações
+     * (todos vinculados por documento_digital_id, portanto acompanham o documento).
+     */
+    private function moverDocumentoDigitalParaProcesso(int $documentoId, Processo $origem, Processo $destino): array
+    {
+        $documento = DocumentoDigital::where(function ($q) use ($origem) {
+                $q->where('processo_id', $origem->id)
+                  ->orWhereRaw("processos_ids::jsonb @> ?::jsonb", [json_encode([$origem->id])])
+                  ->orWhereRaw("processos_ids::jsonb @> ?::jsonb", [json_encode([(string) $origem->id])]);
+            })
+            ->findOrFail($documentoId);
+
+        $avisos = [];
+        $dados = ['pasta_id' => null];
+
+        if ((int) $documento->processo_id === (int) $origem->id) {
+            $dados['processo_id'] = $destino->id;
+        }
+
+        // Documento de lote: troca apenas a referência deste processo, mantendo os demais intactos.
+        if (!empty($documento->processos_ids)) {
+            $ids = collect($documento->processos_ids)
+                ->map(fn ($id) => (int) $id)
+                ->map(fn ($id) => $id === (int) $origem->id ? (int) $destino->id : $id)
+                ->unique()
+                ->values()
+                ->all();
+
+            $dados['processos_ids'] = $ids;
+
+            if (count($ids) > 1) {
+                $avisos[] = 'Este documento é de lote e continua vinculado aos demais processos da ordem de serviço.';
+            }
+        }
+
+        $documento->update($dados);
+
+        $descricao = trim(($documento->nome ?: ($documento->tipoDocumento->nome ?? 'Documento'))
+            . ' ' . ($documento->numero_documento ?? ''));
+
+        return [
+            'tipo' => 'documento',
+            'rotulo' => 'Documento',
+            'id' => $documento->id,
+            'descricao' => $descricao,
+            'avisos' => $avisos,
+        ];
+    }
+
+    /**
+     * Move um arquivo anexado preservando status de aprovação, histórico de rejeições e anotações.
+     */
+    private function moverArquivoParaProcesso(int $arquivoId, Processo $origem, Processo $destino): array
+    {
+        $arquivo = ProcessoDocumento::where('processo_id', $origem->id)->findOrFail($arquivoId);
+
+        $avisos = [];
+        $dados = [
+            'processo_id' => $destino->id,
+            'pasta_id' => null,
+        ];
+
+        // O vínculo com documento obrigatório só vale se o tipo for aceito pelo processo de destino.
+        if ($arquivo->tipo_documento_obrigatorio_id) {
+            $tipoObrigatorio = \App\Models\TipoDocumentoObrigatorio::find($arquivo->tipo_documento_obrigatorio_id);
+            $tipoProcessoDestinoId = $destino->tipoProcesso?->id;
+
+            $compativel = $tipoObrigatorio
+                && ($tipoObrigatorio->tipo_processo_id === null
+                    || (int) $tipoObrigatorio->tipo_processo_id === (int) $tipoProcessoDestinoId);
+
+            if (!$compativel) {
+                $dados['tipo_documento_obrigatorio_id'] = null;
+                $avisos[] = 'O vínculo com o documento obrigatório foi desfeito porque não se aplica ao tipo do processo de destino.';
+            }
+        }
+
+        $arquivo->update($dados);
+
+        return [
+            'tipo' => 'arquivo',
+            'rotulo' => 'Arquivo',
+            'id' => $arquivo->id,
+            'descricao' => $arquivo->nome_original ?: ($arquivo->nome_arquivo ?: 'Arquivo'),
+            'avisos' => $avisos,
+        ];
+    }
+
+    /**
+     * Registra a movimentação no histórico dos dois processos envolvidos.
+     */
+    private function registrarEventosMovimentacao(Processo $origem, Processo $destino, array $resultado, ?string $motivo, $usuario): void
+    {
+        $dadosComuns = [
+            'item_tipo' => $resultado['tipo'],
+            'item_id' => $resultado['id'],
+            'item_descricao' => $resultado['descricao'],
+            'processo_origem_id' => $origem->id,
+            'processo_origem_numero' => $origem->numero_processo,
+            'processo_destino_id' => $destino->id,
+            'processo_destino_numero' => $destino->numero_processo,
+            'motivo' => $motivo,
+        ];
+
+        $sufixoMotivo = $motivo ? ' Motivo: ' . $motivo : '';
+
+        ProcessoEvento::create([
+            'processo_id' => $origem->id,
+            'usuario_interno_id' => $usuario->id,
+            'tipo_evento' => 'item_movido_para_outro_processo',
+            'titulo' => $resultado['rotulo'] . ' movido para outro processo',
+            'descricao' => $resultado['descricao'] . ' foi movido para o processo ' . $destino->numero_processo . '.' . $sufixoMotivo,
+            'dados_adicionais' => $dadosComuns,
+            'ip_address' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+        ]);
+
+        ProcessoEvento::create([
+            'processo_id' => $destino->id,
+            'usuario_interno_id' => $usuario->id,
+            'tipo_evento' => 'item_recebido_de_outro_processo',
+            'titulo' => $resultado['rotulo'] . ' recebido de outro processo',
+            'descricao' => $resultado['descricao'] . ' foi movido do processo ' . $origem->numero_processo . '.' . $sufixoMotivo,
+            'dados_adicionais' => $dadosComuns,
+            'ip_address' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+        ]);
     }
 
     /**

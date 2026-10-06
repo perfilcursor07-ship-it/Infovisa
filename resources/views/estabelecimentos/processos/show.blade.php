@@ -2080,6 +2080,14 @@
                                                             Definir Prazo
                                                         </button>
                                                     @endif
+                                                    @if($podeMoverEntreProcessos ?? false)
+                                                    <hr class="my-1">
+                                                    <button @click="abrirModalMoverProcesso('documento', {{ $docDigital->id }}, '{{ addslashes($docDigital->nome_exibicao) }} - {{ $docDigital->numero_documento }}'); menuAberto = false"
+                                                            class="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-purple-600 hover:text-purple-800 hover:bg-purple-50 transition-colors">
+                                                        <i class="fas fa-exchange-alt fa-fw text-purple-400" style="font-size: 13px;"></i>
+                                                        Mover para outro processo
+                                                    </button>
+                                                    @endif
                                                     <button @click="excluirDocumentoDigital({{ $docDigital->id }}, '{{ addslashes($docDigital->nome_exibicao) }} - {{ $docDigital->numero_documento }}'); menuAberto = false"
                                                             class="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-red-500 hover:text-red-600 hover:bg-red-50 transition-colors">
                                                         <i class="far fa-trash-alt fa-fw" style="font-size: 13px;"></i>
@@ -2518,6 +2526,14 @@
                                                     <button @click="documentoVinculando = {{ $documento->id }}; modalVincularObrigatorio = true; menuAberto = false" class="w-full text-left px-3 py-2 text-xs sm:text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 flex items-center gap-2">
                                                         <i class="fas fa-link fa-fw text-blue-400" style="font-size: 13px;"></i>
                                                         Vincular a Doc. Obrigatório
+                                                    </button>
+                                                    @endif
+                                                    @if($podeMoverEntreProcessos ?? false)
+                                                    <button type="button"
+                                                            @click="abrirModalMoverProcesso('arquivo', {{ $documento->id }}, '{{ addslashes($documento->nome_original) }}'); menuAberto = false"
+                                                            class="w-full text-left px-3 py-2 text-xs sm:text-sm text-purple-600 hover:text-purple-800 hover:bg-purple-50 flex items-center gap-2">
+                                                        <i class="fas fa-exchange-alt fa-fw text-purple-400" style="font-size: 13px;"></i>
+                                                        Mover para outro processo
                                                     </button>
                                                     @endif
                                                     <button type="button" 
@@ -3706,6 +3722,120 @@
                             </button>
                         </div>
                     </form>
+                </div>
+            </div>
+        </div>
+    </template>
+    @endif
+
+    {{-- Modal de Mover para outro Processo (somente administrador) --}}
+    @if($podeMoverEntreProcessos ?? false)
+    <template x-teleport="body">
+        <div x-show="modalMoverProcesso"
+             x-cloak
+             @keydown.escape.window="modalMoverProcesso = false"
+             style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 9999;">
+
+            <div @click="modalMoverProcesso = false"
+                 style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.5);"></div>
+
+            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 100%; max-width: 560px; padding: 0 1rem;">
+                <div class="bg-white rounded-xl shadow-2xl p-6 relative" @click.stop>
+                    <button @click="modalMoverProcesso = false"
+                            class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+
+                    <div class="mb-4 pr-8">
+                        <h3 class="text-lg font-bold text-gray-900 flex items-center gap-2">
+                            <i class="fas fa-exchange-alt text-purple-500"></i>
+                            Mover para outro processo
+                        </h3>
+                        <p class="text-sm text-gray-600 mt-1">
+                            <span x-text="moverItemTipo === 'documento' ? 'Documento' : 'Arquivo'"></span>:
+                            <strong class="text-gray-800" x-text="moverItemNome"></strong>
+                        </p>
+                    </div>
+
+                    <div class="mb-4 bg-purple-50 border border-purple-200 rounded-lg p-3">
+                        <p class="text-xs text-purple-900">
+                            O item sai do processo <strong>{{ $processo->numero_processo }}</strong> e passa a constar no processo escolhido,
+                            mantendo assinaturas, prazos, respostas e histórico. A pasta atual é removida, pois as pastas pertencem a este processo.
+                        </p>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            Processo de destino <span class="text-red-500">*</span>
+                        </label>
+
+                        <template x-if="moverCarregandoProcessos">
+                            <p class="text-sm text-gray-500 py-3 flex items-center gap-2">
+                                <i class="fas fa-spinner fa-spin"></i> Carregando processos abertos...
+                            </p>
+                        </template>
+
+                        <template x-if="!moverCarregandoProcessos && moverProcessosDisponiveis.length === 0">
+                            <div class="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                                <p class="text-xs text-amber-800">
+                                    Este estabelecimento não possui outro processo <strong>aberto</strong> para receber o item.
+                                    Abra ou reative o processo de destino antes de mover.
+                                </p>
+                            </div>
+                        </template>
+
+                        <div x-show="!moverCarregandoProcessos && moverProcessosDisponiveis.length > 0"
+                             class="space-y-2 max-h-64 overflow-y-auto" style="display: none;">
+                            <template x-for="proc in moverProcessosDisponiveis" :key="proc.id">
+                                <label class="flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors"
+                                       :class="moverProcessoDestinoId === proc.id ? 'border-purple-400 bg-purple-50' : 'border-gray-200 hover:bg-gray-50'">
+                                    <input type="radio" name="processo_destino" :value="proc.id"
+                                           x-model.number="moverProcessoDestinoId"
+                                           class="mt-0.5 text-purple-600 focus:ring-purple-500">
+                                    <div class="flex-1 min-w-0">
+                                        <span class="text-sm font-semibold text-gray-900 block leading-tight" x-text="proc.numero_processo"></span>
+                                        <div class="flex items-center gap-2 mt-1 flex-wrap">
+                                            <span class="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-700 rounded font-medium" x-text="proc.tipo_nome"></span>
+                                            <span class="text-[10px] px-1.5 py-0.5 bg-green-100 text-green-700 rounded font-medium">Aberto</span>
+                                            <span class="text-[10px] text-gray-400" x-text="'Aberto em ' + proc.aberto_em"></span>
+                                        </div>
+                                        <p x-show="!proc.mesmo_tipo" class="text-[10px] text-amber-600 mt-1">
+                                            Tipo diferente do processo atual — vínculos com documentos obrigatórios podem ser desfeitos.
+                                        </p>
+                                    </div>
+                                </label>
+                            </template>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Motivo <span class="text-gray-400 font-normal">(opcional)</span></label>
+                        <textarea x-model="moverMotivo" rows="2" maxlength="500"
+                                  placeholder="Ex: Auto de infração pertence ao processo administrativo"
+                                  class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"></textarea>
+                        <p class="text-xs text-gray-500 mt-1">Fica registrado no histórico dos dois processos.</p>
+                    </div>
+
+                    <div x-show="moverErro" class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg" style="display: none;">
+                        <p class="text-xs text-red-700" x-text="moverErro"></p>
+                    </div>
+
+                    <div class="flex items-center gap-3 pt-3 border-t border-gray-200">
+                        <button type="button"
+                                @click="modalMoverProcesso = false"
+                                class="flex-1 px-4 py-2.5 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                            Cancelar
+                        </button>
+                        <button type="button"
+                                @click="confirmarMoverProcesso()"
+                                :disabled="moverEnviando || !moverProcessoDestinoId"
+                                class="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <i class="fas" :class="moverEnviando ? 'fa-spinner fa-spin' : 'fa-exchange-alt'" style="font-size: 12px;"></i>
+                            <span x-text="moverEnviando ? 'Movendo...' : 'Mover'"></span>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -5037,6 +5167,9 @@ Os comprovantes de pagamento dos DAREs devem ser juntados em um único arquivo."
                 modalVincularObrigatorio: false,
                 documentoVinculando: null,
                 tipoDocObrigatorioSelecionado: null,
+                @if($podeMoverEntreProcessos ?? false)
+                modalMoverProcesso: false,
+                @endif
                 modalDocumentoDigital: false,
                 modalPastas: false,
                 modalHistorico: false,
@@ -5063,6 +5196,19 @@ Os comprovantes de pagamento dos DAREs devem ser juntados em um único arquivo."
                 assinarSenha: '',
                 assinarErro: '',
                 assinarCarregando: false,
+
+                @if($podeMoverEntreProcessos ?? false)
+                // Modal de Mover para outro processo
+                moverItemTipo: '',        // 'documento' (digital) ou 'arquivo'
+                moverItemId: null,
+                moverItemNome: '',
+                moverProcessosDisponiveis: [],
+                moverProcessoDestinoId: null,
+                moverMotivo: '',
+                moverCarregandoProcessos: false,
+                moverEnviando: false,
+                moverErro: '',
+                @endif
 
                 // Modal de Prorrogação de Prazo
                 prorrogarPrazoDocumentoId: null,
@@ -5391,6 +5537,79 @@ Os comprovantes de pagamento dos DAREs devem ser juntados em um único arquivo."
                         alert('Erro ao vincular unidade: ' + error.message);
                     }
                 },
+
+                @if($podeMoverEntreProcessos ?? false)
+                // === Mover arquivo/documento para outro processo (somente administrador) ===
+                abrirModalMoverProcesso(tipo, itemId, itemNome) {
+                    this.moverItemTipo = tipo;
+                    this.moverItemId = itemId;
+                    this.moverItemNome = itemNome || '';
+                    this.moverProcessoDestinoId = null;
+                    this.moverMotivo = '';
+                    this.moverErro = '';
+                    this.moverEnviando = false;
+                    this.modalMoverProcesso = true;
+                    this.carregarProcessosDestino();
+                },
+
+                async carregarProcessosDestino() {
+                    this.moverCarregandoProcessos = true;
+                    try {
+                        const response = await fetch('{{ route('admin.estabelecimentos.processos.processos-destino', [$estabelecimento->id, $processo->id]) }}', {
+                            headers: { 'Accept': 'application/json' },
+                        });
+                        const data = await response.json();
+                        this.moverProcessosDisponiveis = data.processos || [];
+                    } catch (error) {
+                        this.moverProcessosDisponiveis = [];
+                        this.moverErro = 'Não foi possível carregar os processos de destino.';
+                    } finally {
+                        this.moverCarregandoProcessos = false;
+                    }
+                },
+
+                async confirmarMoverProcesso() {
+                    if (!this.moverProcessoDestinoId) {
+                        this.moverErro = 'Selecione o processo de destino.';
+                        return;
+                    }
+
+                    this.moverEnviando = true;
+                    this.moverErro = '';
+
+                    try {
+                        const response = await fetch('{{ route('admin.estabelecimentos.processos.mover-item', [$estabelecimento->id, $processo->id]) }}', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json',
+                                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                            },
+                            body: JSON.stringify({
+                                tipo: this.moverItemTipo,
+                                item_id: this.moverItemId,
+                                processo_destino_id: this.moverProcessoDestinoId,
+                                motivo: this.moverMotivo || null,
+                            }),
+                        });
+
+                        const data = await response.json();
+
+                        if (!response.ok || !data.success) {
+                            this.moverErro = data.message || 'Não foi possível mover o item.';
+                            this.moverEnviando = false;
+                            return;
+                        }
+
+                        this.modalMoverProcesso = false;
+                        this.mostrarNotificacao(data.message, 'success');
+                        setTimeout(() => window.location.reload(), 900);
+                    } catch (error) {
+                        this.moverErro = 'Erro ao mover o item: ' + error.message;
+                        this.moverEnviando = false;
+                    }
+                },
+                @endif
 
                 moverParaPasta(itemId, tipo, pastaId, element) {
                     fetch('{{ route('admin.estabelecimentos.processos.pastas.mover', [$estabelecimento->id, $processo->id]) }}', {
