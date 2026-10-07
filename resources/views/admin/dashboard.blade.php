@@ -962,6 +962,11 @@
                                                     <template x-if="t.total && t.total > 1">
                                                         <span class="text-[9px] px-1.5 py-0.5 rounded font-medium bg-purple-50 text-purple-600" x-text="'+' + (t.total - 1)"></span>
                                                     </template>
+                                                    <template x-if="t.reenviado_em_formatado">
+                                                        <span class="text-[9px] px-1.5 py-0.5 rounded font-medium bg-amber-50 text-amber-700"
+                                                              :title="'Arquivo reenviado em ' + t.reenviado_em_formatado + ' — o prazo conta a partir desta data'"
+                                                              x-text="'Reenviado ' + t.reenviado_em_formatado"></span>
+                                                    </template>
                                                 </div>
                                                 <p class="text-[13px] font-semibold text-slate-800 truncate group-hover:text-purple-700 transition" x-text="t.titulo"></p>
                                                 <p class="text-[11px] text-slate-400 truncate" x-text="t.subtitulo"></p>

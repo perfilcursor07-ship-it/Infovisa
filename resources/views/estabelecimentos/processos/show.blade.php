@@ -2415,7 +2415,14 @@
                                             <div class="min-w-0 flex-1">
                                                 <p class="text-xs sm:text-sm font-semibold text-slate-900 hover:text-blue-600 break-words leading-tight">{{ $documento->nome_original }}</p>
                                                 <div class="flex items-center gap-1.5 flex-wrap mt-1">
-                                                    <span class="text-[10px] sm:text-[11px] text-slate-400">{{ $documento->created_at->format('d/m/Y') }}</span>
+                                                    <span class="text-[10px] sm:text-[11px] text-slate-400" title="Primeiro envio em {{ $documento->created_at->format('d/m/Y H:i') }}">{{ $documento->created_at->format('d/m/Y') }}</span>
+                                                    @if($documento->foiReenviado())
+                                                    <span class="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-50 text-amber-700 text-[10px] rounded font-bold"
+                                                          title="Arquivo reenviado em {{ $documento->reenviado_em->format('d/m/Y H:i') }} — o prazo de análise conta a partir desta data">
+                                                        <i class="fas fa-redo" style="font-size: 9px;"></i>
+                                                        Reenviado {{ $documento->reenviado_em->format('d/m/Y H:i') }}
+                                                    </span>
+                                                    @endif
                                                     <span class="text-[11px] sm:text-xs text-slate-500">{{ $documento->tamanho_formatado }}</span>
                                                     <span class="px-1.5 py-0.5 text-[10px] rounded {{ $documento->tipo_usuario === 'interno' ? 'bg-slate-200 text-slate-700 font-semibold' : 'bg-blue-100 text-blue-700 font-semibold' }}">
                                                         {{ $documento->tipo_usuario === 'interno' ? 'Int' : 'Ext' }}
@@ -2583,6 +2590,12 @@
                                             @endif
                                         </div>
                                         @endforeach
+                                        @if($documento->foiReenviado())
+                                        <div class="mt-2 pt-2 border-t border-red-200 flex items-center gap-1.5 text-xs text-amber-700">
+                                            <i class="fas fa-redo" style="font-size: 10px;"></i>
+                                            <span><strong>Reenviado em {{ $documento->reenviado_em->format('d/m/Y H:i') }}</strong> — prazo de análise recontado a partir desta data</span>
+                                        </div>
+                                        @endif
                                     </div>
                                     @endif
                                 </div>

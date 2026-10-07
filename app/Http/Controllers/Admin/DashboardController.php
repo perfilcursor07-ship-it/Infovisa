@@ -1177,7 +1177,9 @@ class DashboardController extends Controller
             $isLicenciamento = $tipoProcesso === 'licenciamento';
             
             if (!isset($tarefasArray[$key])) {
-                $diasPendente = (int) $doc->created_at->diffInDays(now());
+                // O prazo conta do reenvio quando o arquivo já foi rejeitado e reenviado
+                $referenciaDoc = $doc->dataReferenciaAnalise();
+                $diasPendente = (int) $referenciaDoc->diffInDays(now());
                 $tarefasArray[$key] = [
                     'tipo' => 'aprovacao',
                     'processo_id' => $doc->processo_id,
@@ -1190,15 +1192,17 @@ class DashboardController extends Controller
                     'total' => 1,
                     'dias_pendente' => $diasPendente,
                     'atrasado' => $isLicenciamento && $diasPendente > 5, // Só atrasado se for licenciamento
-                    'created_at' => $doc->created_at,
+                    'created_at' => $referenciaDoc,
+                    'reenviado_em' => $doc->reenviado_em,
                 ];
             } else {
                 $tarefasArray[$key]['total']++;
-                // Usar o documento mais RECENTE para calcular o prazo (cada novo documento reinicia o prazo)
-                if ($doc->created_at > $tarefasArray[$key]['created_at']) {
-                    $tarefasArray[$key]['created_at'] = $doc->created_at;
+                // Usar o envio mais RECENTE para calcular o prazo (cada novo envio ou reenvio reinicia o prazo)
+                if ($referenciaDoc > $tarefasArray[$key]['created_at']) {
+                    $tarefasArray[$key]['created_at'] = $referenciaDoc;
                     $tarefasArray[$key]['primeiro_arquivo'] = $doc->nome_original;
-                    $diasPendente = (int) $doc->created_at->diffInDays(now());
+                    $tarefasArray[$key]['reenviado_em'] = $doc->reenviado_em;
+                    $diasPendente = (int) $referenciaDoc->diffInDays(now());
                     $tarefasArray[$key]['dias_pendente'] = $diasPendente;
                     $tarefasArray[$key]['atrasado'] = $isLicenciamento && $diasPendente > 5;
                 }
@@ -1436,6 +1440,9 @@ class DashboardController extends Controller
                     'dias_restantes' => $diasRestantes,
                     'atrasado' => $tarefa['atrasado'],
                     'dias_pendente' => $tarefa['dias_pendente'],
+                    'reenviado_em_formatado' => !empty($tarefa['reenviado_em'])
+                        ? \Carbon\Carbon::parse($tarefa['reenviado_em'])->format('d/m/Y H:i')
+                        : null,
                     'is_licenciamento' => $tarefa['is_licenciamento'],
                     'tipo_processo' => $tarefa['tipo_processo'],
                     'ordem' => 3, // Aprovações de documentos por último
@@ -1698,7 +1705,9 @@ class DashboardController extends Controller
             $isLicenciamento = $tipoProcesso === 'licenciamento';
             
             if (!isset($tarefasArray[$key])) {
-                $diasPendente = (int) $doc->created_at->diffInDays(now());
+                // O prazo conta do reenvio quando o arquivo já foi rejeitado e reenviado
+                $referenciaDoc = $doc->dataReferenciaAnalise();
+                $diasPendente = (int) $referenciaDoc->diffInDays(now());
                 $tarefasArray[$key] = [
                     'tipo' => 'aprovacao',
                     'processo_id' => $doc->processo_id,
@@ -1711,15 +1720,17 @@ class DashboardController extends Controller
                     'total' => 1,
                     'dias_pendente' => $diasPendente,
                     'atrasado' => $isLicenciamento && $diasPendente > 5,
-                    'created_at' => $doc->created_at,
+                    'created_at' => $referenciaDoc,
+                    'reenviado_em' => $doc->reenviado_em,
                 ];
             } else {
                 $tarefasArray[$key]['total']++;
-                // Usar o documento mais RECENTE para calcular o prazo (cada novo documento reinicia o prazo)
-                if ($doc->created_at > $tarefasArray[$key]['created_at']) {
-                    $tarefasArray[$key]['created_at'] = $doc->created_at;
+                // Usar o envio mais RECENTE para calcular o prazo (cada novo envio ou reenvio reinicia o prazo)
+                if ($referenciaDoc > $tarefasArray[$key]['created_at']) {
+                    $tarefasArray[$key]['created_at'] = $referenciaDoc;
                     $tarefasArray[$key]['primeiro_arquivo'] = $doc->nome_original;
-                    $diasPendente = (int) $doc->created_at->diffInDays(now());
+                    $tarefasArray[$key]['reenviado_em'] = $doc->reenviado_em;
+                    $diasPendente = (int) $referenciaDoc->diffInDays(now());
                     $tarefasArray[$key]['dias_pendente'] = $diasPendente;
                     $tarefasArray[$key]['atrasado'] = $isLicenciamento && $diasPendente > 5;
                 }
@@ -1968,6 +1979,9 @@ class DashboardController extends Controller
                     'dias_restantes' => $diasRestantes,
                     'atrasado' => $tarefa['atrasado'],
                     'dias_pendente' => $tarefa['dias_pendente'],
+                    'reenviado_em_formatado' => !empty($tarefa['reenviado_em'])
+                        ? \Carbon\Carbon::parse($tarefa['reenviado_em'])->format('d/m/Y H:i')
+                        : null,
                     'is_licenciamento' => $tarefa['is_licenciamento'],
                     'tipo_processo' => $tarefa['tipo_processo'],
                     'ordem' => 3,

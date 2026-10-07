@@ -1243,6 +1243,8 @@ class ProcessoController extends Controller
                 'status_aprovacao' => 'pendente',
                 'motivo_rejeicao' => null,
                 'historico_rejeicao' => $historicoRejeicao,
+                // Reinicia a contagem do prazo de análise a partir deste reenvio
+                'reenviado_em' => now(),
             ]);
             
             $documento = $documentoExistente;
@@ -1517,6 +1519,9 @@ class ProcessoController extends Controller
             'aprovado_em' => null,
             'tentativas_envio' => $documentoRejeitado->tentativas_envio + 1,
             'historico_rejeicao' => $historicoRejeicao,
+            // Reinicia a contagem do prazo de análise: a vigilância recebe o prazo cheio
+            // para avaliar o arquivo novo, e não o que restava do envio que ela rejeitou.
+            'reenviado_em' => now(),
         ]);
 
         return redirect()->route('company.processos.show', $processo->id)
@@ -1784,7 +1789,6 @@ class ProcessoController extends Controller
                 'prazo_analise_prorrogado_por' => null,
                 'prazo_analise_prorrogado_motivo' => null,
             ]);
-            $respostaRejeitada->iniciarPrazoAnalise();
         } else {
             // Cria o registro da resposta
             DocumentoResposta::create([

@@ -35,6 +35,7 @@ class ProcessoDocumento extends Model
         'caminho_carimbado',
         'hash_arquivo',
         'historico_rejeicao',
+        'reenviado_em',
     ];
 
     protected $casts = [
@@ -42,6 +43,7 @@ class ProcessoDocumento extends Model
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'aprovado_em' => 'datetime',
+        'reenviado_em' => 'datetime',
         'historico_rejeicao' => 'array',
     ];
 
@@ -105,8 +107,37 @@ class ProcessoDocumento extends Model
      */
     public function isSubstituicao(): bool
     {
-        return $this->documento_substituido_id !== null || 
+        return $this->documento_substituido_id !== null ||
                ($this->historico_rejeicao && count($this->historico_rejeicao) > 0);
+    }
+
+    /**
+     * Verifica se o arquivo já foi reenviado após uma rejeição
+     */
+    public function foiReenviado(): bool
+    {
+        return $this->reenviado_em !== null;
+    }
+
+    /**
+     * Data a partir da qual o prazo de análise deve ser contado.
+     *
+     * Cada reenvio reinicia o prazo: a vigilância passa a ter o prazo cheio para analisar
+     * o arquivo novo, e não o que restava do envio anterior que ela própria rejeitou.
+     */
+    public function dataReferenciaAnalise(): ?\Carbon\Carbon
+    {
+        return $this->reenviado_em ?? $this->created_at;
+    }
+
+    /**
+     * Dias decorridos desde o envio que está em análise (conta do reenvio, quando houver)
+     */
+    public function diasEmAnalise(): int
+    {
+        $referencia = $this->dataReferenciaAnalise();
+
+        return $referencia ? (int) $referencia->diffInDays(now()) : 0;
     }
 
     /**
