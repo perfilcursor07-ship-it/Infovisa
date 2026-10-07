@@ -330,11 +330,7 @@ class OrdemServicoController extends Controller
             
             // Se não foi especificado processo_id e não veio de processosEstabelecimentos, tenta vincular ao processo ativo
             if (empty($validated['processo_id'])) {
-                $processoAtivo = $this->buscarProcessosDisponiveisEstabelecimento($estabelecimento->id)->first();
-                
-                if ($processoAtivo) {
-                    $validated['processo_id'] = $processoAtivo->id;
-                }
+                $validated['processo_id'] = $this->resolverProcessoParaVinculoOS($estabelecimento->id);
             }
             
             if ($usuario->isEstadual()) {
@@ -702,14 +698,8 @@ class OrdemServicoController extends Controller
         if (!empty($validated['estabelecimento_id']) && $validated['estabelecimento_id'] != $ordemServico->estabelecimento_id && count($estabelecimentosIds) <= 1) {
             $estabelecimento = Estabelecimento::findOrFail($validated['estabelecimento_id']);
             
-            // Busca processo ativo do estabelecimento
-            $processo = $this->buscarProcessosDisponiveisEstabelecimento($estabelecimento->id)->first();
-            
-            if ($processo) {
-                $validated['processo_id'] = $processo->id;
-            } else {
-                $validated['processo_id'] = null;
-            }
+            // Busca processo do estabelecimento para vincular a OS
+            $validated['processo_id'] = $this->resolverProcessoParaVinculoOS($estabelecimento->id);
             
             // Atualiza competência e município baseado no estabelecimento
             if ($usuario->isEstadual()) {
@@ -1750,6 +1740,29 @@ class OrdemServicoController extends Controller
             })
             ->orderBy('created_at', 'desc')
             ->get();
+    }
+
+    /**
+     * Processo ao qual a OS deve ser vinculada automaticamente.
+     *
+     * Prefere um processo em andamento. Se o estabelecimento so tiver processos parados
+     * ou arquivados, usa o mais recente em vez de deixar a OS sem processo: uma OS com
+     * processo_id nulo nao aparece na tela de processo nenhuma, junto com os documentos
+     * gerados nela.
+     */
+    private function resolverProcessoParaVinculoOS(int $estabelecimentoId): ?int
+    {
+        $emAndamento = $this->buscarProcessosDisponiveisEstabelecimento($estabelecimentoId)->first();
+
+        if ($emAndamento) {
+            return (int) $emAndamento->id;
+        }
+
+        $maisRecente = Processo::where('estabelecimento_id', $estabelecimentoId)
+            ->orderByDesc('created_at')
+            ->first();
+
+        return $maisRecente ? (int) $maisRecente->id : null;
     }
 
     private function getStatusProcessoLabel(?string $status): string
