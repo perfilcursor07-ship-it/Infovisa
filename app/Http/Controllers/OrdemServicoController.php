@@ -388,7 +388,10 @@ class OrdemServicoController extends Controller
                 $syncData = [];
                 foreach ($estabelecimentosIds as $estId) {
                     $syncData[$estId] = [
-                        'processo_id' => $processosEstabelecimentos[$estId] ?? null,
+                        // Sem processo escolhido no formulario, cai no processo do estabelecimento:
+                        // linha com processo_id nulo deixa a OS invisivel na tela do processo.
+                        'processo_id' => $processosEstabelecimentos[$estId]
+                            ?? $this->resolverProcessoParaVinculoOS((int) $estId),
                     ];
                 }
                 $os->estabelecimentos()->sync($syncData);
@@ -780,7 +783,10 @@ class OrdemServicoController extends Controller
             $syncData = [];
             foreach ($estabelecimentosIds as $estId) {
                 $syncData[$estId] = [
-                    'processo_id' => $processosEstabelecimentos[$estId] ?? null,
+                    // Sem processo escolhido no formulario, cai no processo do estabelecimento:
+                    // linha com processo_id nulo deixa a OS invisivel na tela do processo.
+                    'processo_id' => $processosEstabelecimentos[$estId]
+                        ?? $this->resolverProcessoParaVinculoOS((int) $estId),
                 ];
             }
             $ordemServico->estabelecimentos()->sync($syncData);
@@ -1040,19 +1046,18 @@ class OrdemServicoController extends Controller
             // Primeiro estabelecimento como referência principal
             $ordemServico->estabelecimento_id = $estabelecimentosIds[0];
 
-            // Busca processo ativo do primeiro estabelecimento
-            $processo = \App\Models\Processo::where('estabelecimento_id', $estabelecimentosIds[0])
-                ->whereIn('status', ['aberto', 'em_analise', 'pendente'])
-                ->orderBy('created_at', 'desc')
-                ->first();
-            $ordemServico->processo_id = $processo?->id;
+            // Busca processo do primeiro estabelecimento para vincular a OS
+            $ordemServico->processo_id = $this->resolverProcessoParaVinculoOS((int) $estabelecimentosIds[0]);
             $ordemServico->save();
 
             // Sincroniza pivot com processo por estabelecimento
             $syncData = [];
             foreach ($estabelecimentosIds as $estId) {
                 $syncData[$estId] = [
-                    'processo_id' => $processosEstabelecimentos[$estId] ?? null,
+                    // Sem processo escolhido no formulario, cai no processo do estabelecimento:
+                    // linha com processo_id nulo deixa a OS invisivel na tela do processo.
+                    'processo_id' => $processosEstabelecimentos[$estId]
+                        ?? $this->resolverProcessoParaVinculoOS((int) $estId),
                 ];
             }
             $ordemServico->estabelecimentos()->sync($syncData);
@@ -1060,11 +1065,7 @@ class OrdemServicoController extends Controller
             $estId = $request->input('estabelecimento_id');
             $ordemServico->estabelecimento_id = $estId;
 
-            $processo = \App\Models\Processo::where('estabelecimento_id', $estId)
-                ->whereIn('status', ['aberto', 'em_analise', 'pendente'])
-                ->orderBy('created_at', 'desc')
-                ->first();
-            $ordemServico->processo_id = $processo?->id;
+            $ordemServico->processo_id = $this->resolverProcessoParaVinculoOS((int) $estId);
             $ordemServico->save();
 
             $ordemServico->estabelecimentos()->sync([
