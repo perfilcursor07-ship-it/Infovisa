@@ -154,7 +154,7 @@ class ConfiguracaoSistemaController extends Controller
         $conteudo = (string) data_get($resposta->json(), 'choices.0.message.content', '');
         $json = preg_match('/\{.*\}/s', $conteudo, $m) ? json_decode($m[0], true) : null;
         $leuCerto = is_array($json)
-            && strtoupper((string) ($json['conselho'] ?? '')) === 'CRM'
+            && $Leitor::siglaConselho($json['conselho'] ?? null) === 'CRM'
             && strtoupper((string) ($json['uf'] ?? '')) === 'TO'
             && preg_replace('/\D/', '', (string) ($json['numero'] ?? '')) === '3269';
 

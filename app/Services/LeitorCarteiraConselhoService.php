@@ -177,7 +177,7 @@ class LeitorCarteiraConselhoService
             return null;
         }
 
-        $conselho = strtoupper((string) ($json['conselho'] ?? ''));
+        $conselho = self::siglaConselho($json['conselho'] ?? null);
         $uf = strtoupper((string) ($json['uf'] ?? ''));
         $numero = preg_replace('/\D/', '', (string) ($json['numero'] ?? ''));
         $cpf = preg_replace('/\D/', '', (string) ($json['cpf'] ?? ''));
@@ -190,6 +190,18 @@ class LeitorCarteiraConselhoService
             'nome' => !empty($json['nome']) && is_string($json['nome']) ? mb_strtoupper(trim($json['nome']), 'UTF-8') : null,
             'cpf' => strlen($cpf) === 11 ? $cpf : null,
         ];
+    }
+
+    /**
+     * Sigla do conselho dentro do que a IA devolveu ("CRM|UF", "CRM-TO" → "CRM"); CRMV antes de CRM.
+     */
+    public static function siglaConselho($valor): ?string
+    {
+        preg_match_all('/\b(CRMV|CRO|CRM)\b/', strtoupper((string) $valor), $m);
+        $siglas = array_values(array_unique($m[1]));
+
+        // Mais de uma sigla (ex.: a IA repetiu o modelo "CRM|CRO|CRMV"): não dá para saber, ficam as regras
+        return count($siglas) === 1 ? $siglas[0] : null;
     }
 
     /**
