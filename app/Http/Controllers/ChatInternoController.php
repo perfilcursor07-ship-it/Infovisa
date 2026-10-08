@@ -98,6 +98,9 @@ class ChatInternoController extends Controller
             ->orderByDesc('ultima_mensagem_at')
             ->limit(30) // Limita para performance
             ->get()
+            // Conversa com usuário excluído: o outro participante não existe mais
+            ->filter(fn ($conversa) => $conversa->getOutroUsuario($usuarioAtual->id) !== null)
+            ->values()
             ->map(function ($conversa) use ($usuarioAtual, $onlineIds) {
                 $outroUsuario = $conversa->getOutroUsuario($usuarioAtual->id);
                 $ultimaMensagem = $conversa->ultimaMensagem;

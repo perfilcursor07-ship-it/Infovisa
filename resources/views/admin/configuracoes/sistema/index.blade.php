@@ -620,6 +620,15 @@
                     <p class="font-semibold" x-text="resultado?.ok ? 'Conexão funcionando' : ('Falhou na etapa: ' + (resultado?.etapa || ''))"></p>
                     <p class="mt-0.5 break-words" x-text="resultado?.mensagem"></p>
                     <p x-show="resultado?.resposta" class="mt-1 text-xs font-mono break-all opacity-80" x-text="'Resposta da IA: ' + resultado?.resposta"></p>
+                    <div x-show="resultado?.modelos?.length" class="mt-2">
+                        <p class="text-xs font-semibold">Modelos disponíveis na sua conta — clique para usar e teste de novo:</p>
+                        <div class="mt-1 flex flex-wrap gap-1.5">
+                            <template x-for="m in (resultado?.modelos || [])" :key="m">
+                                <button type="button" @click="$refs.modelo.value = m; resultado = null"
+                                        class="px-2 py-0.5 rounded-md bg-white border border-red-200 text-xs font-mono text-slate-700 hover:border-emerald-400 hover:text-emerald-700" x-text="m"></button>
+                            </template>
+                        </div>
+                    </div>
                     <p class="mt-1 text-xs opacity-75" x-show="resultado?.origem" x-text="resultado?.origem === 'tela' ? 'Testado com os valores digitados acima — clique em Salvar para passar a usar.' : (resultado?.origem === 'documentos' ? 'Usando a configuração salva desta seção.' : 'Usando a configuração geral de IA (esta seção está incompleta).')"></p>
                 </div>
 

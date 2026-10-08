@@ -147,7 +147,17 @@ class ConfiguracaoSistemaController extends Controller
                 default => 'resposta da API',
             };
 
-            return response()->json(['ok' => false, 'etapa' => $etapa, 'mensagem' => "HTTP {$resposta->status()}: {$detalhe}", 'ms' => $ms, 'origem' => $config['origem']]);
+            // Modelo inexistente: mostra os modelos disponíveis nessa conta/servidor
+            $modelos = in_array($resposta->status(), [400, 404], true) ? $this->modelosDisponiveis($config) : [];
+
+            return response()->json([
+                'ok' => false,
+                'etapa' => $etapa,
+                'mensagem' => "HTTP {$resposta->status()}: {$detalhe}",
+                'modelos' => $modelos,
+                'ms' => $ms,
+                'origem' => $config['origem'],
+            ]);
         }
 
         // Confere se a IA leu certo o exemplo (CRM-TO 3269)
@@ -166,6 +176,35 @@ class ConfiguracaoSistemaController extends Controller
             'resposta' => mb_substr($conteudo, 0, 200),
             'origem' => $config['origem'],
         ]);
+    }
+
+    /**
+     * Lista os modelos de chat disponíveis (endpoint /models da API compatível com OpenAI).
+     */
+    private function modelosDisponiveis(array $config): array
+    {
+        $urlModelos = preg_replace('#/chat/completions/?$#', '/models', (string) $config['url']);
+        if ($urlModelos === $config['url']) {
+            return [];
+        }
+
+        try {
+            $resposta = \Illuminate\Support\Facades\Http::withHeaders(['Authorization' => 'Bearer ' . ($config['key'] ?: 'local')])
+                ->connectTimeout(8)
+                ->timeout(15)
+                ->get($urlModelos);
+        } catch (\Throwable $e) {
+            return [];
+        }
+
+        return collect(data_get($resposta->json(), 'data', []))
+            ->pluck('id')
+            ->filter(fn ($id) => is_string($id) && !preg_match('/whisper|tts|embed|guard|vision-preview|playai|orpheus/i', $id))
+            ->map(fn ($id) => preg_replace('#^models/#', '', $id))
+            ->sort()
+            ->values()
+            ->take(40)
+            ->all();
     }
 
     /**
