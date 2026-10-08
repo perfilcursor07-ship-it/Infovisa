@@ -80,29 +80,48 @@ class ConfiguracaoSistemaController extends Controller
     }
 
     /**
-     * Testa a IA usada na leitura de documentos (diagnóstico de rede/chave/modelo).
+     * Testa a IA usada na leitura de documentos (diagnóstico de rede/chave/modelo e qualidade da leitura).
+     * Usa os valores digitados na tela; sem eles, a configuração salva. Chave em branco reaproveita a salva.
      */
-    public function testarIaDocumentos()
+    public function testarIaDocumentos(Request $request)
     {
-        $config = \App\Services\LeitorCarteiraConselhoService::configuracaoIaDocumentos();
-        $local = \App\Services\LeitorCarteiraConselhoService::urlLocal($config['url']);
+        $Leitor = \App\Services\LeitorCarteiraConselhoService::class;
+        $salva = $Leitor::configuracaoIaDocumentos();
+
+        $url = trim((string) $request->input('url')) ?: null;
+        $modelo = trim((string) $request->input('model')) ?: null;
+        if ($url || $modelo) {
+            $chaveSalva = trim((string) ConfiguracaoSistema::where('chave', 'ia_documentos_api_key')->value('valor')) ?: null;
+            $config = ['url' => $url, 'model' => $modelo, 'key' => trim((string) $request->input('key')) ?: $chaveSalva, 'origem' => 'tela'];
+        } else {
+            $config = $salva;
+        }
+
+        $local = $Leitor::urlLocal($config['url']);
         if (!$config['url'] || !$config['model'] || (!$config['key'] && !$local)) {
-            return response()->json(['ok' => false, 'etapa' => 'configuração', 'mensagem' => 'Preencha URL, modelo e chave (a chave é dispensada só para IA local) e salve antes de testar.']);
+            return response()->json(['ok' => false, 'etapa' => 'configuração', 'mensagem' => 'Preencha URL, modelo e chave (a chave é dispensada só para IA local).']);
         }
 
         $host = parse_url($config['url'], PHP_URL_HOST);
-        $inicio = microtime(true);
+        $corpo = [
+            'model' => $config['model'],
+            'temperature' => 0,
+            'max_tokens' => 80,
+            'messages' => [
+                ['role' => 'system', 'content' => 'Você extrai dados de carteiras de conselho de classe e devolve SOMENTE um JSON no formato {"conselho":"CRM|CRO|CRMV","uf":"sigla","numero":"apenas dígitos"}.'],
+                ['role' => 'user', 'content' => "Texto do documento:\n\nCONSELHO REGIONAL DE MEDICINA DO ESTADO DO TOCANTINS\nCRM/UF\n3269/TO\nNOME ABNER RIBEIRO"],
+            ],
+        ];
+        if ($local) {
+            $corpo['response_format'] = ['type' => 'json_object'];
+        }
 
+        $inicio = microtime(true);
         try {
             $resposta = \Illuminate\Support\Facades\Http::withHeaders(['Authorization' => 'Bearer ' . ($config['key'] ?: 'local')])
                 ->connectTimeout(8)
                 ->timeout($local ? 90 : 20)
-                ->post($config['url'], [
-                    'model' => $config['model'],
-                    'temperature' => 0,
-                    'max_tokens' => 20,
-                    'messages' => [['role' => 'user', 'content' => 'Responda apenas: {"ok":true}']],
-                ]);
+                ->post($config['url'], $corpo);
         } catch (\Throwable $e) {
             $msg = $e->getMessage();
             $etapa = $local && str_contains($msg, 'Failed to connect') ? 'IA local (o Ollama não está rodando no servidor)'
@@ -131,10 +150,20 @@ class ConfiguracaoSistemaController extends Controller
             return response()->json(['ok' => false, 'etapa' => $etapa, 'mensagem' => "HTTP {$resposta->status()}: {$detalhe}", 'ms' => $ms, 'origem' => $config['origem']]);
         }
 
+        // Confere se a IA leu certo o exemplo (CRM-TO 3269)
+        $conteudo = (string) data_get($resposta->json(), 'choices.0.message.content', '');
+        $json = preg_match('/\{.*\}/s', $conteudo, $m) ? json_decode($m[0], true) : null;
+        $leuCerto = is_array($json)
+            && strtoupper((string) ($json['conselho'] ?? '')) === 'CRM'
+            && strtoupper((string) ($json['uf'] ?? '')) === 'TO'
+            && preg_replace('/\D/', '', (string) ($json['numero'] ?? '')) === '3269';
+
         return response()->json([
             'ok' => true,
-            'mensagem' => "Conectado a {$host} com o modelo {$config['model']} em {$ms} ms.",
-            'resposta' => mb_substr((string) data_get($resposta->json(), 'choices.0.message.content', ''), 0, 120),
+            'leu_certo' => $leuCerto,
+            'mensagem' => "Conectado a {$host} com o modelo {$config['model']} em " . number_format($ms / 1000, 1, ',', '') . ' s. '
+                . ($leuCerto ? 'Leitura de teste correta (CRM-TO 3269).' : 'A conexão funciona, mas a leitura de teste veio diferente do esperado.'),
+            'resposta' => mb_substr($conteudo, 0, 200),
             'origem' => $config['origem'],
         ]);
     }

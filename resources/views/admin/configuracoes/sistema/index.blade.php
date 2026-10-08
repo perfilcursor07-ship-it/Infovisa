@@ -555,7 +555,8 @@
                     try {
                         const r = await fetch(@js(route('admin.configuracoes.sistema.testar-ia-documentos')), {
                             method: 'POST',
-                            headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': @js(csrf_token()) },
+                            headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': @js(csrf_token()) },
+                            body: JSON.stringify({ url: this.$refs.url.value, model: this.$refs.modelo.value, key: this.$refs.chave.value }),
                         });
                         this.resultado = await r.json();
                     } catch (e) {
@@ -603,7 +604,7 @@
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Chave da API <span class="font-normal text-gray-400">(não precisa para o Ollama)</span></label>
-                        <input type="password" name="ia_documentos_api_key" autocomplete="new-password"
+                        <input type="password" name="ia_documentos_api_key" x-ref="chave" autocomplete="new-password"
                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                placeholder="{{ $iaDocumentos['tem_chave'] ? '•••••••• (salva — deixe em branco para manter)' : 'Cole a chave aqui' }}">
                         @if($iaDocumentos['tem_chave'])
@@ -618,13 +619,14 @@
                      :class="resultado?.ok ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-800'">
                     <p class="font-semibold" x-text="resultado?.ok ? 'Conexão funcionando' : ('Falhou na etapa: ' + (resultado?.etapa || ''))"></p>
                     <p class="mt-0.5 break-words" x-text="resultado?.mensagem"></p>
-                    <p class="mt-0.5 text-xs opacity-75" x-show="resultado?.origem" x-text="resultado?.origem === 'documentos' ? 'Usando a configuração desta seção.' : 'Usando a configuração geral de IA (esta seção está incompleta).'"></p>
+                    <p x-show="resultado?.resposta" class="mt-1 text-xs font-mono break-all opacity-80" x-text="'Resposta da IA: ' + resultado?.resposta"></p>
+                    <p class="mt-1 text-xs opacity-75" x-show="resultado?.origem" x-text="resultado?.origem === 'tela' ? 'Testado com os valores digitados acima — clique em Salvar para passar a usar.' : (resultado?.origem === 'documentos' ? 'Usando a configuração salva desta seção.' : 'Usando a configuração geral de IA (esta seção está incompleta).')"></p>
                 </div>
 
                 <div class="flex flex-wrap justify-end gap-3 pt-2 border-t border-gray-100">
                     <button type="button" @click="testar()" :disabled="testando"
                             class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-                        <span x-text="testando ? 'Testando…' : 'Testar conexão (configuração salva)'"></span>
+                        <span x-text="testando ? 'Testando… (IA local pode levar até 1 min)' : 'Testar conexão'"></span>
                     </button>
                     <button type="submit" class="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">Salvar</button>
                 </div>

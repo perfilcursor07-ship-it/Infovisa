@@ -25,18 +25,24 @@ trait LeDocumentoComIa
         }
 
         try {
+            $corpo = [
+                'model' => $modelo,
+                'temperature' => 0,
+                'max_tokens' => 500,
+                'messages' => [
+                    ['role' => 'system', 'content' => $instrucao],
+                    ['role' => 'user', 'content' => "Texto do documento:\n\n" . $texto],
+                ],
+            ];
+            // Modelos locais pequenos (Ollama) só devolvem JSON de forma confiável no modo JSON
+            if (self::urlLocal($apiUrl)) {
+                $corpo['response_format'] = ['type' => 'json_object'];
+            }
+
             $resposta = Http::withHeaders(['Authorization' => 'Bearer ' . ($apiKey ?: 'local')])
                 ->connectTimeout(8)
                 ->timeout(self::urlLocal($apiUrl) ? 90 : 25)
-                ->post($apiUrl, [
-                    'model' => $modelo,
-                    'temperature' => 0,
-                    'max_tokens' => 500,
-                    'messages' => [
-                        ['role' => 'system', 'content' => $instrucao],
-                        ['role' => 'user', 'content' => "Texto do documento:\n\n" . $texto],
-                    ],
-                ]);
+                ->post($apiUrl, $corpo);
 
             if (!$resposta->successful()) {
                 Log::warning("Leitura de {$documento}: IA respondeu com erro", ['status' => $resposta->status()]);
