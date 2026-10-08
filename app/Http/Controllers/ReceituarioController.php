@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Receituario;
 use App\Models\Municipio;
 use App\Models\Processo;
+use App\Models\UsuarioExterno;
+use App\Services\ReceituarioCadastroService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
@@ -246,11 +248,11 @@ class ReceituarioController extends Controller
             return $redirect;
         }
 
-        $receituario = Receituario::with(['municipio', 'processo', 'usuarioCriacao', 'usuarioExterno', 'analisadoPor:id,nome', 'estabelecimento.processos'])->findOrFail($id);
+        $receituario = Receituario::with(['municipio', 'processo', 'usuarioCriacao', 'usuarioExterno', 'analisadoPor:id,nome', 'estabelecimento.processos', 'usuariosVinculados'])->findOrFail($id);
 
         // Aba inicial: a pedida na URL; senão Documentos quando há documento aguardando análise
         $aba = $request->query('aba');
-        if (!in_array($aba, ['geral', 'editar', 'documentos', 'processos'], true)) {
+        if (!in_array($aba, ['geral', 'editar', 'documentos', 'processos', 'usuarios'], true)) {
             $temPendente = collect($receituario->documentosDaAnalise())->contains(fn ($d) => $receituario->statusDocumento($d) === 'pendente');
             $aba = $receituario->isSolicitacaoExterna() && $temPendente ? 'documentos' : 'geral';
         }
@@ -530,5 +532,83 @@ class ReceituarioController extends Controller
         
         // Retorna o PDF para visualização no navegador
         return $pdf->stream($nomeArquivo);
+    }
+
+    // ===================== Usuários vinculados ao cadastro =====================
+
+    /**
+     * Busca usuários externos para vincular ao cadastro (nome, e-mail ou CPF).
+     */
+    public function usuariosBuscar(Request $request, $id)
+    {
+        if ($this->verificarPermissao()) {
+            return response()->json([], 403);
+        }
+
+        $receituario = Receituario::findOrFail($id);
+        $termo = trim((string) $request->query('q'));
+        if (mb_strlen($termo) < 3) {
+            return response()->json([]);
+        }
+
+        $digitos = preg_replace('/\D/', '', $termo);
+        $excluir = $receituario->usuariosVinculados()->pluck('usuarios_externos.id')->push($receituario->usuario_externo_id)->filter()->all();
+
+        $usuarios = UsuarioExterno::query()
+            ->whereNotIn('id', $excluir)
+            ->where(function ($q) use ($termo, $digitos) {
+                $q->where('nome', 'ILIKE', "%{$termo}%")->orWhere('email', 'ILIKE', "%{$termo}%");
+                if (strlen($digitos) >= 3) {
+                    $q->orWhere('cpf', 'like', "%{$digitos}%");
+                }
+            })
+            ->orderBy('nome')
+            ->limit(10)
+            ->get(['id', 'nome', 'email', 'cpf']);
+
+        return response()->json($usuarios->map(fn ($u) => [
+            'id' => $u->id,
+            'nome' => $u->nome,
+            'email' => $u->email,
+            'cpf' => $u->cpf_formatado ?? $u->cpf,
+        ]));
+    }
+
+    public function usuariosStore(Request $request, $id, ReceituarioCadastroService $cadastro)
+    {
+        if ($redirect = $this->verificarPermissao()) {
+            return $redirect;
+        }
+
+        $receituario = Receituario::findOrFail($id);
+        $dados = $request->validate([
+            'usuario_externo_id' => 'required|exists:usuarios_externos,id',
+            'tipo_vinculo' => ['required', Rule::in(array_keys(Receituario::TIPOS_VINCULO))],
+        ], [
+            'usuario_externo_id.required' => 'Selecione o usuário que vai ter acesso ao cadastro.',
+            'tipo_vinculo.required' => 'Informe se o usuário é o profissional ou funcionário.',
+        ]);
+
+        if ((int) $dados['usuario_externo_id'] === (int) $receituario->usuario_externo_id) {
+            return back()->with('error', 'Este usuário já é quem cadastrou o profissional.');
+        }
+
+        $cadastro->vincularUsuario($receituario, (int) $dados['usuario_externo_id'], $dados['tipo_vinculo'], Auth::guard('interno')->id());
+
+        return redirect()->route('admin.receituarios.show', ['id' => $receituario->id, 'aba' => 'usuarios'])
+            ->with('success', 'Usuário vinculado. Ele já pode acessar o cadastro e os processos do profissional.');
+    }
+
+    public function usuariosDestroy($id, $usuarioId, ReceituarioCadastroService $cadastro)
+    {
+        if ($redirect = $this->verificarPermissao()) {
+            return $redirect;
+        }
+
+        $receituario = Receituario::findOrFail($id);
+        $cadastro->desvincularUsuario($receituario, (int) $usuarioId);
+
+        return redirect()->route('admin.receituarios.show', ['id' => $receituario->id, 'aba' => 'usuarios'])
+            ->with('success', 'Vínculo removido.');
     }
 }

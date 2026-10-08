@@ -133,6 +133,12 @@
                         Processos
                         <span class="ml-auto px-2 py-0.5 rounded-full text-[11px] font-semibold tabular-nums bg-blue-100 text-blue-700">{{ $processosProfissional->count() }}</span>
                     </button>
+                    <button type="button" @click="aba = 'usuarios'" class="{{ $itemMenu }}"
+                            :class="aba === 'usuarios' ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-50'">
+                        <svg class="{{ $iconeMenu }}" :class="aba === 'usuarios' && '!text-blue-600'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                        Usuários vinculados
+                        <span class="ml-auto px-2 py-0.5 rounded-full text-[11px] font-semibold tabular-nums bg-indigo-100 text-indigo-700">{{ $receituario->usuariosVinculados->count() + ($receituario->usuario_externo_id ? 1 : 0) }}</span>
+                    </button>
                 </nav>
             </div>
         </aside>
@@ -482,6 +488,16 @@
                         </ul>
                     @endif
                 </section>
+            </div>
+
+            {{-- ============ USUÁRIOS VINCULADOS ============ --}}
+            <div x-show="aba === 'usuarios'" x-cloak>
+                @include('receituarios.partials.usuarios-vinculados', [
+                    'rotaBuscar' => route('admin.receituarios.usuarios.buscar', $receituario->id),
+                    'rotaVincular' => route('admin.receituarios.usuarios.store', $receituario->id),
+                    'rotaDesvincular' => fn ($usuarioId) => route('admin.receituarios.usuarios.destroy', [$receituario->id, $usuarioId]),
+                    'usuarioAtualId' => null,
+                ])
             </div>
         </div>
     </div>

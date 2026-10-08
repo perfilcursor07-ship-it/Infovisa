@@ -17,6 +17,16 @@
         ['rotulo' => 'Liberadas', 'total' => $requisicoes->where('status', 'liberada')->count(), 'cor' => 'text-emerald-600'],
         ['rotulo' => 'Indeferidas', 'total' => $requisicoes->where('status', 'indeferida')->count(), 'cor' => 'text-red-600'],
     ];
+    $aguardandoRequisicoes = $requisicoes->whereIn('status', ['enviada', 'em_analise'])->count();
+    $filtroInicialRequisicoes = $aguardandoRequisicoes > 0 ? 'aguardando' : 'todas';
+    $filtrosRequisicoes = [];
+    if ($aguardandoRequisicoes > 0) {
+        $filtrosRequisicoes[] = ['id' => 'aguardando', 'rotulo' => 'Aguardando análise', 'total' => $aguardandoRequisicoes, 'ativa' => 'bg-amber-500 text-white'];
+    }
+    $filtrosRequisicoes[] = ['id' => 'todas', 'rotulo' => 'Todas', 'total' => $requisicoes->count(), 'ativa' => 'bg-slate-700 text-white'];
+    $filtrosRequisicoes[] = ['id' => 'liberada', 'rotulo' => 'Liberadas', 'total' => $requisicoes->where('status', 'liberada')->count(), 'ativa' => 'bg-emerald-600 text-white'];
+    $filtrosRequisicoes[] = ['id' => 'indeferida', 'rotulo' => 'Indeferidas', 'total' => $requisicoes->where('status', 'indeferida')->count(), 'ativa' => 'bg-rose-600 text-white'];
+    $filtrosRequisicoes[] = ['id' => 'cancelada', 'rotulo' => 'Canceladas', 'total' => $requisicoes->where('status', 'cancelada')->count(), 'ativa' => 'bg-slate-500 text-white'];
     $totalAtivas = $requisicoes->where('status', '!=', 'cancelada')->count();
     $aguardando = $contagem[0]['total'];
     $abertoPor = $processo->aberto_por_externo
@@ -26,7 +36,7 @@
         ? route('admin.receituarios.show', $receituario->id)
         : route('admin.estabelecimentos.processos.index', $estabelecimento->id);
     $dados = $receituario ? $Req::dadosRequisitante($receituario) : null;
-    $primeiraPendente = $requisicoes->firstWhere('status', 'enviada')?->id ?? $requisicoes->first()?->id;
+    $primeiraPendente = $requisicoes->first(fn ($requisicao) => in_array($requisicao->status, ['enviada', 'em_analise'], true))?->id ?? $requisicoes->first()?->id;
     $acompanhando = $processo->acompanhamentos->where('usuario_interno_id', auth('interno')->id())->first();
 
     $itemMenu = 'w-full flex items-center gap-2.5 px-2 py-1.5 text-[13px] font-medium text-slate-700 hover:bg-slate-50 rounded-lg transition-colors';
@@ -202,140 +212,104 @@
             </div>
 
             {{-- Histórico --}}
-            <div id="historico" class="scroll-mt-4 bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-                <h3 class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2.5">Histórico</h3>
-                <ol class="relative border-l border-slate-200 ml-1.5 space-y-3">
-                    @forelse($eventos as $evento)
-                    <li class="pl-4 relative">
-                        <span class="absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full bg-slate-300 ring-2 ring-white"></span>
-                        <p class="text-xs font-medium text-slate-800">{{ $evento->titulo }}</p>
-                        @if($evento->descricao)<p class="text-[11px] text-slate-500 leading-snug">{{ $evento->descricao }}</p>@endif
-                        <p class="text-[10px] text-slate-400">{{ $evento->created_at->format('d/m/Y H:i') }}{{ $evento->usuario ? ' · ' . $evento->usuario->nome : '' }}</p>
-                    </li>
-                    @empty
-                    <li class="pl-4 text-xs text-slate-400">Sem eventos.</li>
-                    @endforelse
-                </ol>
-            </div>
+            <details id="historico" class="scroll-mt-4 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <summary class="cursor-pointer px-4 py-3 text-[11px] font-semibold text-slate-500 uppercase tracking-wider hover:bg-slate-50">
+                    Histórico <span class="ml-1 text-slate-400">({{ $eventos->count() }})</span>
+                </summary>
+                <div class="px-4 pb-4">
+                    <ol class="relative border-l border-slate-200 ml-1.5 space-y-3">
+                        @forelse($eventos as $evento)
+                        <li class="pl-4 relative">
+                            <span class="absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full bg-slate-300 ring-2 ring-white"></span>
+                            <p class="text-xs font-medium text-slate-800">{{ $evento->titulo }}</p>
+                            @if($evento->descricao)<p class="text-[11px] text-slate-500 leading-snug">{{ $evento->descricao }}</p>@endif
+                            <p class="text-[10px] text-slate-400">{{ $evento->created_at->format('d/m/Y H:i') }}{{ $evento->usuario ? ' · ' . $evento->usuario->nome : '' }}</p>
+                        </li>
+                        @empty
+                        <li class="pl-4 text-xs text-slate-400">Sem eventos.</li>
+                        @endforelse
+                    </ol>
+                </div>
+            </details>
         </div>
 
         {{-- Coluna direita --}}
         <div class="space-y-4 min-w-0">
             {{-- Requisições --}}
-            <section id="requisicoes" class="scroll-mt-4 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden" x-data="{ aberta: {{ $primeiraPendente ?? 'null' }} }">
-                <header class="px-4 py-3 border-b border-blue-100 bg-gradient-to-r from-blue-50 to-white flex items-center gap-2.5">
-                    <span class="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center flex-shrink-0">
+            <section id="requisicoes" class="scroll-mt-4 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden" x-data="{ filtroRequisicoes: @js($filtroInicialRequisicoes) }">
+                <header class="px-4 py-3 border-b border-slate-100 bg-white flex items-center gap-2.5">
+                    <span class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
                     </span>
                     <div>
                         <h2 class="text-sm font-semibold text-slate-900">Requisições de receita</h2>
-                        <p class="text-[11px] text-slate-500">Pedidos de notificação/numeração enviados pela empresa. Cada pedido é individual — clique para ver os detalhes.</p>
+                        <p class="text-[11px] text-slate-500">Pedidos de notificação/numeração enviados pela empresa. Clique em um pedido para ver os dados e analisar.</p>
                     </div>
                 </header>
+
+                <div class="px-4 py-2.5 border-b border-slate-100 bg-slate-50/70">
+                    <div role="group" aria-label="Filtrar requisições por situação" class="inline-flex max-w-full gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1">
+                        @foreach($filtrosRequisicoes as $filtro)
+                        <button type="button" :aria-pressed="filtroRequisicoes === @js($filtro['id'])"
+                                @click="filtroRequisicoes = @js($filtro['id'])"
+                                :class="filtroRequisicoes === @js($filtro['id']) ? @js($filtro['ativa']) + ' shadow-sm' : 'text-slate-600 hover:bg-white'"
+                                class="inline-flex min-h-9 flex-shrink-0 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-colors">
+                            {{ $filtro['rotulo'] }}
+                            <span class="rounded-full px-1.5 py-0.5 text-[10px] tabular-nums"
+                                  :class="filtroRequisicoes === @js($filtro['id']) ? 'bg-white/20 text-white' : 'bg-white text-slate-500'">{{ $filtro['total'] }}</span>
+                        </button>
+                        @endforeach
+                    </div>
+                </div>
 
                 @forelse($requisicoes as $requisicao)
                 @php
                     $situacao = $requisicao->situacao;
                     $r = $requisicao->requisitante ?? [];
+                    $grupoFiltro = in_array($requisicao->status, ['enviada', 'em_analise'], true) ? 'aguardando' : $requisicao->status;
+                    $bordaSituacao = match ($requisicao->status) {
+                        'enviada' => 'border-l-blue-400',
+                        'em_analise' => 'border-l-amber-400',
+                        'liberada' => 'border-l-emerald-500',
+                        'indeferida' => 'border-l-rose-500',
+                        'cancelada' => 'border-l-slate-300',
+                        default => 'border-l-slate-200',
+                    };
                 @endphp
-                <article class="border-b border-slate-100 last:border-0">
-                    <button type="button" @click="aberta = aberta === {{ $requisicao->id }} ? null : {{ $requisicao->id }}"
-                            class="w-full text-left px-4 py-3 flex flex-col md:flex-row md:items-center gap-2 md:gap-4 hover:bg-slate-50 transition"
-                            :class="aberta === {{ $requisicao->id }} ? 'bg-slate-50' : ''">
-                        <div class="md:w-36 flex-shrink-0">
+                <article x-show="filtroRequisicoes === 'todas' || filtroRequisicoes === @js($grupoFiltro)" class="border-b border-l-2 {{ $bordaSituacao }} border-slate-100 last:border-0">
+                    <a href="{{ route('admin.estabelecimentos.processos.requisicoes.show', [$estabelecimento->id, $processo->id, $requisicao->id]) }}"
+                       class="group w-full text-left px-4 py-3.5 flex flex-col md:flex-row md:items-center gap-2.5 md:gap-4 bg-white hover:bg-slate-50 transition">
+                        <div class="md:w-40 flex-shrink-0">
                             <p class="text-sm font-bold text-slate-900 tabular-nums">Nº {{ $requisicao->numero }}</p>
-                            <p class="text-[11px] text-slate-500">{{ $requisicao->created_at->format('d/m/Y H:i') }}</p>
+                            <p class="mt-0.5 text-[11px] text-slate-500">{{ $requisicao->created_at->format('d/m/Y H:i') }}</p>
                         </div>
-                        <div class="flex-1 min-w-0 flex flex-wrap gap-1.5">
+                        <div class="flex-1 min-w-0 flex flex-wrap gap-2">
                             @foreach($requisicao->resumoQuantidades() as $modalidade)
+                                @php
+                                    $corModalidade = $modalidade['rotulo'] === 'Física'
+                                        ? 'border-cyan-100 bg-cyan-50 text-cyan-900'
+                                        : 'border-violet-100 bg-violet-50 text-violet-900';
+                                @endphp
+                                <span class="inline-flex flex-wrap items-center gap-1.5 rounded-md border px-2 py-1 {{ $corModalidade }}">
+                                    <span class="text-[10px] font-semibold">{{ $modalidade['rotulo'] }}</span>
                                 @foreach($modalidade['itens'] as $item)
-                                <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-slate-100 text-[11px] text-slate-700">
-                                    <span class="text-slate-400">{{ $modalidade['rotulo'] }}</span>
-                                    <span class="font-bold">{{ $item['tipo'] }}</span>
-                                    <span class="tabular-nums">× {{ $item['quantidade'] }}</span>
-                                </span>
+                                    <span class="inline-flex items-center gap-1 rounded bg-white/80 px-1.5 py-0.5 text-[11px]">
+                                        <span class="font-bold">{{ $item['tipo'] }}</span>
+                                        <span class="tabular-nums">× {{ $item['quantidade'] }}</span>
+                                    </span>
                                 @endforeach
+                                </span>
                             @endforeach
                         </div>
-                        <div class="flex items-center gap-3 flex-shrink-0">
-                            <span class="text-xs text-slate-500 tabular-nums">{{ $requisicao->totalBlocos() }} bloco(s)</span>
+                        <div class="flex items-center justify-between gap-2 md:justify-end flex-shrink-0">
+                            <span class="inline-flex items-center rounded-md bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-700 tabular-nums">{{ $requisicao->totalBlocos() }} bloco(s)</span>
                             <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold ring-1 ring-inset {{ $situacao['classe'] }}">
                                 <span class="w-1.5 h-1.5 rounded-full {{ $situacao['dot'] }}"></span>{{ $situacao['label'] }}
                             </span>
-                            <svg class="w-4 h-4 text-slate-400 transition-transform" :class="aberta === {{ $requisicao->id }} ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                            <svg class="w-4 h-4 text-slate-300 group-hover:text-blue-600 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                         </div>
-                    </button>
+                    </a>
 
-                    <div x-show="aberta === {{ $requisicao->id }}" x-cloak class="px-4 pb-4 pt-1 space-y-4" x-data="{ verDeclaracoes: false }">
-                        <div class="overflow-x-auto">
-                            <table class="w-full min-w-[480px] text-sm border border-slate-200 rounded-lg overflow-hidden">
-                                <thead>
-                                    <tr class="bg-slate-50 text-xs text-slate-600">
-                                        <th class="px-3 py-2 text-left font-semibold">Blocos</th>
-                                        @foreach($Req::TIPOS_NOTIFICACAO as $tipo)
-                                        <th class="px-3 py-2 text-center font-semibold">{{ $tipo }}</th>
-                                        @endforeach
-                                        <th class="px-3 py-2 text-center font-semibold">Total</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-slate-100">
-                                    @foreach($Req::MODALIDADES as $chave => $rotulo)
-                                    @php $linha = $requisicao->quantidades[$chave] ?? []; @endphp
-                                    <tr>
-                                        <td class="px-3 py-2 font-medium text-slate-700">{{ $rotulo }}</td>
-                                        @foreach($Req::TIPOS_NOTIFICACAO as $tipo)
-                                        @php $qtd = (int) ($linha[$tipo] ?? 0); @endphp
-                                        <td class="px-3 py-2 text-center tabular-nums {{ $qtd ? 'font-bold text-slate-900' : 'text-slate-300' }}">
-                                            {{ $qtd ?: '—' }}
-                                            @if($requisicao->quantidades_liberadas !== null && $qtd)
-                                            <span class="block text-[10px] font-semibold text-emerald-600">liberado: {{ (int) ($requisicao->quantidades_liberadas[$chave][$tipo] ?? 0) }}</span>
-                                            @endif
-                                        </td>
-                                        @endforeach
-                                        <td class="px-3 py-2 text-center font-semibold tabular-nums text-slate-700">{{ array_sum(array_map('intval', $linha)) }}</td>
-                                    </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                            <div>
-                                <p class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Justificativa</p>
-                                <p class="mt-0.5 {{ $requisicao->justificativa ? 'text-slate-800 whitespace-pre-line' : 'text-slate-400' }}">{{ $requisicao->justificativa ?: 'Não informada' }}</p>
-                            </div>
-                            <div>
-                                <p class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Assinatura eletrônica</p>
-                                <p class="mt-0.5 text-slate-800">{{ $requisicao->usuarioExterno?->nome ?? 'Usuário externo' }}</p>
-                                <p class="text-xs text-slate-500">{{ $requisicao->assinado_em?->format('d/m/Y H:i:s') }}{{ $requisicao->ip_address ? ' · IP ' . $requisicao->ip_address : '' }}</p>
-                            </div>
-                        </div>
-
-                        @if(!empty($r['conselho']) || !empty($r['especialidade']))
-                        <p class="text-xs text-slate-500">Dados do requisitante no envio: {{ $r['nome'] ?? '' }}{{ !empty($r['conselho']) ? ' · ' . $r['conselho'] : '' }}{{ !empty($r['especialidade']) ? ' · ' . $r['especialidade'] : '' }}</p>
-                        @endif
-
-                        @if($requisicao->observacao_vigilancia)
-                        <div class="rounded-lg border px-3 py-2 text-sm {{ $requisicao->status === 'indeferida' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-emerald-50 border-emerald-200 text-emerald-800' }}">
-                            <span class="font-semibold">Resposta da Vigilância:</span> {{ $requisicao->observacao_vigilancia }}
-                            @if($requisicao->analisadoPor)<span class="text-xs opacity-75"> — {{ $requisicao->analisadoPor->nome }}, {{ $requisicao->analisado_em?->format('d/m/Y H:i') }}</span>@endif
-                        </div>
-                        @endif
-
-                        @if($requisicao->status === 'cancelada')
-                        <p class="text-xs text-slate-500">Cancelada pela empresa em {{ $requisicao->cancelado_em?->format('d/m/Y H:i') }}.</p>
-                        @endif
-
-                        <div>
-                            <button type="button" @click="verDeclaracoes = !verDeclaracoes" class="text-xs font-medium text-blue-700 hover:underline"
-                                    x-text="verDeclaracoes ? 'Ocultar declarações aceitas' : 'Ver declarações aceitas ({{ count($requisicao->declaracoes ?? []) }})'"></button>
-                            <ul x-show="verDeclaracoes" x-cloak class="mt-2 space-y-1.5 rounded-lg bg-slate-50 p-3 text-xs text-slate-600 leading-relaxed list-disc list-inside">
-                                @foreach($requisicao->declaracoes ?? [] as $declaracao)
-                                <li>{{ $declaracao['texto'] ?? '' }}</li>
-                                @endforeach
-                            </ul>
-                        </div>
-                    </div>
                 </article>
                 @empty
                 <div class="px-4 py-12 text-center">
@@ -346,8 +320,16 @@
                     <p class="text-xs text-slate-500 mt-1">Quando a empresa enviar um pedido de notificação de receita, ele aparece aqui.</p>
                 </div>
                 @endforelse
+                @foreach($filtrosRequisicoes as $filtro)
+                    @if($filtro['id'] !== 'todas' && $filtro['total'] === 0)
+                    <div x-cloak x-show="filtroRequisicoes === @js($filtro['id'])" class="px-4 py-8 text-center text-xs text-slate-500">
+                        Nenhuma requisição nesta situação.
+                    </div>
+                    @endif
+                @endforeach
             </section>
 
+            @if($documentosDigitais->isNotEmpty() || $arquivos->isNotEmpty())
             {{-- Documentos do processo (separado das requisições) --}}
             <div class="flex items-center gap-3 pt-2">
                 <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">Documentos do processo</span>
@@ -425,6 +407,7 @@
                 @endforeach
                 @endif
             </section>
+            @endif
         </div>
     </div>
 

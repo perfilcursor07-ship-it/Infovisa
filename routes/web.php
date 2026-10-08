@@ -101,6 +101,10 @@ Route::middleware(['auth:externo', 'no-cache-auth'])->prefix('company')->name('c
         Route::get('create', [\App\Http\Controllers\Company\ReceituarioController::class, 'create'])->name('create');
         Route::post('/', [\App\Http\Controllers\Company\ReceituarioController::class, 'store'])->name('store');
         Route::get('buscar-cnpj', [\App\Http\Controllers\Company\ReceituarioController::class, 'buscarCnpj'])->name('buscar-cnpj');
+        Route::get('verificar-cpf', [\App\Http\Controllers\Company\ReceituarioController::class, 'verificarCpf'])->middleware('throttle:30,1')->name('verificar-cpf');
+        Route::get('{id}/usuarios/buscar', [\App\Http\Controllers\Company\ReceituarioController::class, 'usuariosBuscar'])->whereNumber('id')->name('usuarios.buscar');
+        Route::post('{id}/usuarios', [\App\Http\Controllers\Company\ReceituarioController::class, 'usuariosStore'])->whereNumber('id')->name('usuarios.store');
+        Route::delete('{id}/usuarios/{usuario}', [\App\Http\Controllers\Company\ReceituarioController::class, 'usuariosDestroy'])->whereNumber('id')->whereNumber('usuario')->name('usuarios.destroy');
         Route::post('ler-carteira', [\App\Http\Controllers\Company\ReceituarioController::class, 'lerCarteira'])->middleware('throttle:20,1')->name('ler-carteira');
         Route::get('{id}/carteira/{lado?}', [\App\Http\Controllers\Company\ReceituarioController::class, 'carteira'])->whereNumber('id')->whereIn('lado', ['frente', 'verso'])->name('carteira');
         Route::post('ler-comprovante', [\App\Http\Controllers\Company\ReceituarioController::class, 'lerComprovante'])->middleware('throttle:20,1')->name('ler-comprovante');
@@ -418,6 +422,7 @@ Route::middleware(['auth:interno', 'no-cache-auth'])->prefix('admin')->name('adm
     Route::post('/estabelecimentos/{id}/processos', [\App\Http\Controllers\ProcessoController::class, 'store'])->name('estabelecimentos.processos.store');
     Route::get('/estabelecimentos/{id}/processos/{processo}', [\App\Http\Controllers\ProcessoController::class, 'show'])->name('estabelecimentos.processos.show');
     Route::get('/estabelecimentos/{id}/processos/{processo}/integra', [\App\Http\Controllers\ProcessoController::class, 'integra'])->name('estabelecimentos.processos.integra');
+    Route::get('/estabelecimentos/{id}/processos/{processo}/requisicoes/{requisicao}', [\App\Http\Controllers\ProcessoController::class, 'showRequisicaoReceituario'])->whereNumber('requisicao')->name('estabelecimentos.processos.requisicoes.show');
     Route::patch('/estabelecimentos/{id}/processos/{processo}/status', [\App\Http\Controllers\ProcessoController::class, 'updateStatus'])->name('estabelecimentos.processos.updateStatus');
     Route::post('/estabelecimentos/{id}/processos/{processo}/acompanhar', [\App\Http\Controllers\ProcessoController::class, 'toggleAcompanhamento'])->name('estabelecimentos.processos.toggleAcompanhamento');
     Route::get('/estabelecimentos/{id}/processos/{processo}/acompanhar', function ($id, $processo) {
@@ -630,6 +635,9 @@ Route::middleware(['auth:interno', 'no-cache-auth'])->prefix('admin')->name('adm
         Route::put('{id}', [\App\Http\Controllers\ReceituarioController::class, 'update'])->name('update');
         Route::delete('{id}', [\App\Http\Controllers\ReceituarioController::class, 'destroy'])->name('destroy');
         Route::post('{id}/criar-processo', [\App\Http\Controllers\ReceituarioController::class, 'criarProcesso'])->name('criar-processo');
+        Route::get('{id}/usuarios/buscar', [\App\Http\Controllers\ReceituarioController::class, 'usuariosBuscar'])->whereNumber('id')->name('usuarios.buscar');
+        Route::post('{id}/usuarios', [\App\Http\Controllers\ReceituarioController::class, 'usuariosStore'])->whereNumber('id')->name('usuarios.store');
+        Route::delete('{id}/usuarios/{usuario}', [\App\Http\Controllers\ReceituarioController::class, 'usuariosDestroy'])->whereNumber('id')->whereNumber('usuario')->name('usuarios.destroy');
         Route::post('{id}/documentos/{documento}/analisar', [\App\Http\Controllers\ReceituarioController::class, 'analisarDocumento'])->whereIn('documento', ['carteira', 'comprovante'])->name('documento.analisar');
         Route::get('{id}/documento-assinado', [\App\Http\Controllers\ReceituarioController::class, 'documentoAssinado'])->name('documento-assinado');
     });

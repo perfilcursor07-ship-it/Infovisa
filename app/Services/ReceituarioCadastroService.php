@@ -55,8 +55,64 @@ class ReceituarioCadastroService
         ]);
 
         $receituario->update(['estabelecimento_id' => $estabelecimento->id]);
+        $this->sincronizarVinculos($receituario);
 
         return $estabelecimento;
+    }
+
+    /**
+     * Vincula um usuário externo ao cadastro (nível sempre gestor).
+     */
+    public function vincularUsuario(Receituario $receituario, int $usuarioExternoId, string $tipoVinculo, ?int $porInternoId = null, ?int $porExternoId = null): void
+    {
+        $receituario->usuariosVinculados()->syncWithoutDetaching([
+            $usuarioExternoId => [
+                'tipo_vinculo' => $tipoVinculo,
+                'nivel_acesso' => 'gestor',
+                'vinculado_por_interno_id' => $porInternoId,
+                'vinculado_por_externo_id' => $porExternoId,
+            ],
+        ]);
+
+        $this->sincronizarVinculos($receituario);
+    }
+
+    public function desvincularUsuario(Receituario $receituario, int $usuarioExternoId): void
+    {
+        $receituario->usuariosVinculados()->detach($usuarioExternoId);
+
+        // Retira também o acesso aos processos (cadastro interno), exceto de quem cadastrou
+        if ($receituario->estabelecimento_id && (int) $receituario->usuario_externo_id !== $usuarioExternoId) {
+            DB::table('estabelecimento_usuario_externo')
+                ->where('estabelecimento_id', $receituario->estabelecimento_id)
+                ->where('usuario_externo_id', $usuarioExternoId)
+                ->delete();
+        }
+    }
+
+    /**
+     * Espelha os vínculos do cadastro no estabelecimento interno, para que os usuários
+     * vinculados também acessem os processos e as requisições de receituário.
+     */
+    public function sincronizarVinculos(Receituario $receituario): void
+    {
+        $estabelecimento = $receituario->estabelecimento_id ? Estabelecimento::find($receituario->estabelecimento_id) : null;
+        if (!$estabelecimento) {
+            return;
+        }
+
+        $vinculos = $receituario->usuariosVinculados()->get()->mapWithKeys(fn ($usuario) => [
+            $usuario->id => [
+                'tipo_vinculo' => $usuario->pivot->tipo_vinculo,
+                'nivel_acesso' => 'gestor',
+                'vinculado_por' => $usuario->pivot->vinculado_por_interno_id,
+                'observacao' => 'Vínculo do cadastro de receituário #' . $receituario->id,
+            ],
+        ])->all();
+
+        if ($vinculos) {
+            $estabelecimento->usuariosVinculados()->syncWithoutDetaching($vinculos);
+        }
     }
 
     /**

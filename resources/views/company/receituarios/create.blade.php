@@ -95,6 +95,16 @@
         </div>
         @endif
 
+        {{-- Profissional já cadastrado no sistema --}}
+        <div x-show="duplicado" x-cloak class="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3" role="alert">
+            <svg class="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+            <div class="text-sm text-red-900">
+                <p class="font-semibold">Profissional já cadastrado</p>
+                <p class="mt-0.5" x-text="duplicado?.mensagem"></p>
+                <a x-show="duplicado?.url" :href="duplicado?.url" class="mt-1.5 inline-block text-xs font-semibold text-red-800 underline">Abrir o cadastro →</a>
+            </div>
+        </div>
+
         <div x-show="podeVerPassos()" x-cloak class="space-y-4">
             {{-- Passos --}}
             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm px-5 py-3">
@@ -192,6 +202,26 @@ function wizardReceituario() {
         avisoEscolha: false,
         // Estado enviado pela carteira do conselho (passo 0) e pelo comprovante de endereço (passo 1)
         estadoPasso: {},
+        // Profissional já cadastrado (CPF existente no sistema)
+        duplicado: null,
+        cpfVerificado: '',
+
+        async verificarCpf() {
+            if (!['medico', 'talidomida'].includes(tipo)) return true;
+            const cpf = (this.campo('cpf')?.value || '').replace(/\D/g, '');
+            if (cpf.length !== 11) return true;
+            if (cpf === this.cpfVerificado) return !this.duplicado;
+            try {
+                const r = await fetch(@js(route('company.receituarios.verificar-cpf')) + '?cpf=' + cpf, { headers: { 'Accept': 'application/json' } });
+                const dados = r.ok ? await r.json() : { existe: false };
+                this.cpfVerificado = cpf;
+                this.duplicado = dados.existe ? dados : null;
+            } catch (e) {
+                return true; // sem conexão: o servidor confere de novo no envio
+            }
+            if (this.duplicado) window.scrollTo({ top: 0, behavior: 'smooth' });
+            return !this.duplicado;
+        },
 
         lendoAtual() {
             return !!this.estadoPasso[this.currentStep]?.lendo;
@@ -218,7 +248,7 @@ function wizardReceituario() {
             this.solicitante = opcao;
             this.alterandoSolicitante = false;
             this.avisoEscolha = false;
-            this.$nextTick(() => this.aplicarSolicitante(trocou));
+            this.$nextTick(() => { this.aplicarSolicitante(trocou); this.verificarCpf(); });
         },
 
         // "Sou o profissional": preenche com o cadastro e trava nome/CPF.
@@ -278,8 +308,9 @@ function wizardReceituario() {
             return true;
         },
 
-        nextStep() {
+        async nextStep() {
             if (!this.validarPassoAtual()) return;
+            if (this.currentStep === 0 && !(await this.verificarCpf())) return;
             if (this.currentStep < this.steps.length - 1) {
                 this.currentStep++;
                 window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -293,8 +324,9 @@ function wizardReceituario() {
             }
         },
 
-        goToStep(index) {
+        async goToStep(index) {
             if (index > this.currentStep && !this.validarPassoAtual()) return;
+            if (index > 0 && this.currentStep === 0 && !(await this.verificarCpf())) return;
             this.currentStep = index;
         },
 
@@ -326,6 +358,11 @@ function wizardReceituario() {
         },
 
         validarEnvio(evento) {
+            if (this.duplicado) {
+                evento.preventDefault();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                return;
+            }
             if (tipo === 'medico' && !this.solicitante) {
                 evento.preventDefault();
                 this.avisoEscolha = true;

@@ -150,6 +150,33 @@ class Receituario extends Model
         return $this->belongsTo(UsuarioExterno::class, 'usuario_externo_id');
     }
 
+    /** Tipos de vínculo de usuários externos ao cadastro (todos com nível gestor). */
+    public const TIPOS_VINCULO = [
+        'profissional' => 'Profissional',
+        'funcionario' => 'Funcionário',
+    ];
+
+    /**
+     * Usuários externos vinculados ao cadastro, além de quem cadastrou
+     */
+    public function usuariosVinculados()
+    {
+        return $this->belongsToMany(UsuarioExterno::class, 'receituario_usuario_externo')
+            ->withPivot('tipo_vinculo', 'nivel_acesso', 'vinculado_por_interno_id', 'vinculado_por_externo_id')
+            ->withTimestamps();
+    }
+
+    /**
+     * Cadastros que o usuário externo pode acessar: os que cadastrou e os que está vinculado
+     */
+    public function scopeAcessivelPor($query, ?int $usuarioExternoId)
+    {
+        return $query->where(function ($q) use ($usuarioExternoId) {
+            $q->where('usuario_externo_id', $usuarioExternoId)
+                ->orWhereHas('usuariosVinculados', fn ($v) => $v->where('usuarios_externos.id', $usuarioExternoId));
+        });
+    }
+
     /**
      * Cadastro interno (estabelecimento oculto) onde ficam os processos de receituário do profissional
      */

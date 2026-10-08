@@ -132,6 +132,12 @@
                             <svg class="ml-auto w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-label="Disponível após a aprovação"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
                         @endif
                     </button>
+                    <button type="button" @click="aba = 'usuarios'" class="{{ $itemMenu }}"
+                            :class="aba === 'usuarios' ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-50'">
+                        <svg class="{{ $iconeMenu }}" :class="aba === 'usuarios' && '!text-blue-600'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                        Usuários vinculados
+                        <span class="ml-auto px-2 py-0.5 rounded-full text-[11px] font-semibold tabular-nums bg-indigo-100 text-indigo-700">{{ $receituario->usuariosVinculados->count() + ($receituario->usuario_externo_id ? 1 : 0) }}</span>
+                    </button>
                 </nav>
 
                 @if($receituario->isAprovado() && $tiposProcesso->isNotEmpty())
@@ -282,6 +288,16 @@
                         <button type="button" @click="aba = 'documentos'" class="mt-4 text-xs font-semibold text-blue-700 hover:underline">Ver situação dos documentos →</button>
                     </div>
                 @endif
+            </div>
+
+            {{-- ============ USUÁRIOS VINCULADOS ============ --}}
+            <div x-show="aba === 'usuarios'" x-cloak>
+                @include('receituarios.partials.usuarios-vinculados', [
+                    'rotaBuscar' => route('company.receituarios.usuarios.buscar', $receituario->id),
+                    'rotaVincular' => route('company.receituarios.usuarios.store', $receituario->id),
+                    'rotaDesvincular' => fn ($usuarioId) => route('company.receituarios.usuarios.destroy', [$receituario->id, $usuarioId]),
+                    'usuarioAtualId' => auth('externo')->id(),
+                ])
             </div>
         </div>
     </div>

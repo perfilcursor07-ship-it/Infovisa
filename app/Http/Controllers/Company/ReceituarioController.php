@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Company;
 use App\Http\Controllers\Controller;
 use App\Models\Municipio;
 use App\Models\Receituario;
+use App\Models\UsuarioExterno;
 use App\Services\LeitorComprovanteEnderecoService;
 use App\Services\ReceituarioCadastroService;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -14,7 +15,7 @@ use Illuminate\Validation\Rule;
 
 /**
  * Solicitação de receituário pela área da empresa (usuário externo).
- * Cada usuário vê e acessa somente as solicitações que ele mesmo fez.
+ * Cada usuário vê e acessa as solicitações que fez e os cadastros aos quais foi vinculado.
  */
 class ReceituarioController extends Controller
 {
@@ -23,7 +24,7 @@ class ReceituarioController extends Controller
     public function index(Request $request)
     {
         $query = Receituario::with(['municipio', 'estabelecimento' => fn ($q) => $q->withCount('processos')])
-            ->where('usuario_externo_id', auth('externo')->id());
+            ->acessivelPor(auth('externo')->id());
 
         if ($request->filled('tipo') && in_array($request->tipo, self::TIPOS, true)) {
             $query->where('tipo', $request->tipo);
@@ -47,7 +48,7 @@ class ReceituarioController extends Controller
 
         $receituarios = $query->orderByDesc('created_at')->paginate(15)->withQueryString();
 
-        $porStatus = Receituario::where('usuario_externo_id', auth('externo')->id())
+        $porStatus = Receituario::acessivelPor(auth('externo')->id())
             ->selectRaw('status, count(*) as total')
             ->groupBy('status')
             ->pluck('total', 'status');
@@ -88,6 +89,13 @@ class ReceituarioController extends Controller
                 'error',
                 'No momento, está disponível apenas o cadastro para Médico, Dentista ou Veterinário.'
             );
+        }
+
+        // Profissional já cadastrado (por outra pessoa ou pela Vigilância): não cria um segundo cadastro
+        $cpfInformado = preg_replace('/\D/', '', (string) ($request->input('solicitante') === 'proprio' ? $usuario->cpf : $request->input('cpf')));
+        if (strlen($cpfInformado) === 11 && ($existente = $this->cadastroExistente($cpfInformado))) {
+            return back()->withInput($request->except(['carteira_conselho', 'carteira_conselho_verso', 'comprovante_endereco']))
+                ->withErrors(['cpf' => $this->mensagemCadastroExistente($existente)]);
         }
 
         $rules = [
@@ -221,9 +229,9 @@ class ReceituarioController extends Controller
 
     public function show(Request $request, $id, ReceituarioCadastroService $cadastro)
     {
-        $receituario = $this->doUsuario($id)->load(['municipio', 'estabelecimento.processos', 'analisadoPor:id,nome']);
+        $receituario = $this->doUsuario($id)->load(['municipio', 'estabelecimento.processos', 'analisadoPor:id,nome', 'usuarioExterno:id,nome,email,cpf', 'usuariosVinculados']);
         $tiposProcesso = $receituario->isAprovado() ? $cadastro->tiposDisponiveis() : collect();
-        $aba = in_array($request->query('aba'), ['documentos', 'processos'], true) ? $request->query('aba') : 'geral';
+        $aba = in_array($request->query('aba'), ['documentos', 'processos', 'usuarios'], true) ? $request->query('aba') : 'geral';
 
         return view('company.receituarios.show', compact('receituario', 'tiposProcesso', 'aba'));
     }
@@ -669,11 +677,120 @@ class ReceituarioController extends Controller
         return $paginas >= 2;
     }
 
+    // ===================== Profissional já cadastrado =====================
+
     /**
-     * Receituário do usuário logado (404 para os dos outros)
+     * Consulta (no passo 1 do cadastro) se o CPF do profissional já tem cadastro no sistema.
+     */
+    public function verificarCpf(Request $request)
+    {
+        $cpf = preg_replace('/\D/', '', (string) $request->query('cpf'));
+        if (strlen($cpf) !== 11) {
+            return response()->json(['existe' => false]);
+        }
+
+        $existente = $this->cadastroExistente($cpf);
+        if (!$existente) {
+            return response()->json(['existe' => false]);
+        }
+
+        $temAcesso = Receituario::acessivelPor(auth('externo')->id())->whereKey($existente->id)->exists();
+
+        return response()->json([
+            'existe' => true,
+            'tem_acesso' => $temAcesso,
+            'mensagem' => $this->mensagemCadastroExistente($existente),
+            'url' => $temAcesso ? route('company.receituarios.show', $existente->id) : null,
+        ]);
+    }
+
+    private function cadastroExistente(string $cpf): ?Receituario
+    {
+        return Receituario::whereIn('tipo', ['medico', 'talidomida'])->where('cpf', $cpf)->first();
+    }
+
+    private function mensagemCadastroExistente(Receituario $existente): string
+    {
+        if (Receituario::acessivelPor(auth('externo')->id())->whereKey($existente->id)->exists()) {
+            return 'Este profissional já está cadastrado e você já tem acesso a esse cadastro. Abra-o em "Profissionais cadastrados".';
+        }
+
+        return 'Já existe um cadastro deste profissional no sistema. Entre em contato com a Vigilância Sanitária '
+            . 'para tirar dúvidas ou pedir que você seja vinculado ao cadastro do profissional.';
+    }
+
+    // ===================== Usuários vinculados ao cadastro =====================
+
+    public function usuariosBuscar(Request $request, $id)
+    {
+        $receituario = $this->doUsuario($id);
+        $termo = trim((string) $request->query('q'));
+        if (mb_strlen($termo) < 3) {
+            return response()->json([]);
+        }
+
+        $digitos = preg_replace('/\D/', '', $termo);
+        $excluir = $receituario->usuariosVinculados()->pluck('usuarios_externos.id')->push($receituario->usuario_externo_id)->filter()->all();
+
+        $usuarios = UsuarioExterno::query()
+            ->whereNotIn('id', $excluir)
+            ->where(function ($q) use ($termo, $digitos) {
+                $q->where('nome', 'ILIKE', "%{$termo}%")->orWhere('email', 'ILIKE', "%{$termo}%");
+                if (strlen($digitos) >= 3) {
+                    $q->orWhere('cpf', 'like', "%{$digitos}%");
+                }
+            })
+            ->orderBy('nome')
+            ->limit(10)
+            ->get(['id', 'nome', 'email', 'cpf']);
+
+        return response()->json($usuarios->map(fn ($u) => [
+            'id' => $u->id,
+            'nome' => $u->nome,
+            'email' => $u->email,
+            'cpf' => $u->cpf_formatado ?? $u->cpf,
+        ]));
+    }
+
+    public function usuariosStore(Request $request, $id, ReceituarioCadastroService $cadastro)
+    {
+        $receituario = $this->doUsuario($id);
+        $dados = $request->validate([
+            'usuario_externo_id' => 'required|exists:usuarios_externos,id',
+            'tipo_vinculo' => ['required', Rule::in(array_keys(Receituario::TIPOS_VINCULO))],
+        ], [
+            'usuario_externo_id.required' => 'Selecione o usuário que vai ter acesso ao cadastro.',
+            'tipo_vinculo.required' => 'Informe se o usuário é o profissional ou funcionário.',
+        ]);
+
+        if ((int) $dados['usuario_externo_id'] === (int) $receituario->usuario_externo_id) {
+            return back()->with('error', 'Este usuário já é quem cadastrou o profissional.');
+        }
+
+        $cadastro->vincularUsuario($receituario, (int) $dados['usuario_externo_id'], $dados['tipo_vinculo'], null, auth('externo')->id());
+
+        return redirect()->route('company.receituarios.show', ['id' => $receituario->id, 'aba' => 'usuarios'])
+            ->with('success', 'Usuário vinculado. Ele já pode acessar o cadastro e os processos do profissional.');
+    }
+
+    public function usuariosDestroy($id, $usuarioId, ReceituarioCadastroService $cadastro)
+    {
+        $receituario = $this->doUsuario($id);
+        $cadastro->desvincularUsuario($receituario, (int) $usuarioId);
+
+        if ((int) $usuarioId === (int) auth('externo')->id()) {
+            return redirect()->route('company.receituarios.index')->with('success', 'Você saiu do cadastro do profissional.');
+        }
+
+        return redirect()->route('company.receituarios.show', ['id' => $receituario->id, 'aba' => 'usuarios'])
+            ->with('success', 'Vínculo removido.');
+    }
+
+    /**
+     * Receituário que o usuário logado cadastrou ou ao qual está vinculado (404 para os demais)
      */
     private function doUsuario($id): Receituario
     {
-        return Receituario::where('usuario_externo_id', auth('externo')->id())->findOrFail($id);
+        return Receituario::acessivelPor(auth('externo')->id())->findOrFail($id);
     }
 }

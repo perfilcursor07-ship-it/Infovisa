@@ -4514,6 +4514,38 @@ TXT;
         ));
     }
 
+    /**
+     * Tela de análise de uma requisição de receituário (Vigilância).
+     */
+    public function showRequisicaoReceituario($estabelecimentoId, $processoId, $requisicaoId)
+    {
+        $estabelecimento = Estabelecimento::findOrFail($estabelecimentoId);
+        $this->validarPermissaoAcesso($estabelecimento);
+
+        $processo = Processo::with('tipoProcesso')
+            ->where('estabelecimento_id', $estabelecimentoId)
+            ->findOrFail($processoId);
+        abort_unless($processo->isProcessoReceituario(), 404);
+
+        $requisicao = $processo->requisicoesReceituario()
+            ->with(['usuarioExterno:id,nome,email', 'analisadoPor:id,nome'])
+            ->findOrFail($requisicaoId);
+
+        $receituario = $estabelecimento->receituario;
+
+        // Histórico do profissional: as outras requisições dele (em qualquer processo)
+        $historico = \App\Models\ReceituarioRequisicao::query()
+            ->where('id', '!=', $requisicao->id)
+            ->where(fn ($q) => $q->where('processo_id', $processo->id)
+                ->when($receituario, fn ($q2) => $q2->orWhere('receituario_id', $receituario->id)))
+            ->orderByDesc('created_at')
+            ->get();
+
+        return view('estabelecimentos.processos.requisicao-receituario', compact(
+            'estabelecimento', 'processo', 'requisicao', 'receituario', 'historico'
+        ));
+    }
+
     private function validarPermissaoAcesso($estabelecimento, ?Processo $processo = null)
     {
         $usuario = auth('interno')->user();
