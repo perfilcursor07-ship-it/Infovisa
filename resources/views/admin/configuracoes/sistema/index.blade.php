@@ -543,6 +543,93 @@
                 </form>
             </div>
         </div>
+
+        {{-- IA da leitura de documentos do receituário (separada do assistente) --}}
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden mb-6 config-section"
+             data-search="ia leitura documentos receituário carteira conselho comprovante endereço groq gemini gratuita ocr"
+             x-data="{
+                testando: false,
+                resultado: null,
+                async testar() {
+                    this.testando = true; this.resultado = null;
+                    try {
+                        const r = await fetch(@js(route('admin.configuracoes.sistema.testar-ia-documentos')), {
+                            method: 'POST',
+                            headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': @js(csrf_token()) },
+                        });
+                        this.resultado = await r.json();
+                    } catch (e) {
+                        this.resultado = { ok: false, etapa: 'navegador', mensagem: 'Não foi possível chamar o teste.' };
+                    }
+                    this.testando = false;
+                },
+                usar(url, modelo) { this.$refs.url.value = url; this.$refs.modelo.value = modelo; }
+             }">
+            <div class="px-6 py-4 bg-gradient-to-r from-emerald-50 to-white border-b border-gray-200">
+                <h2 class="text-lg font-semibold text-gray-900">IA da leitura de documentos (Receituário)</h2>
+                <p class="text-sm text-gray-600 mt-1">
+                    Usada só para ler a carteira do conselho e o comprovante de endereço no cadastro de receituário.
+                    Se ficar em branco, usa a configuração de IA acima. Sem IA, a leitura continua funcionando por regras.
+                </p>
+            </div>
+            <form action="{{ route('admin.configuracoes.sistema.update') }}" method="POST" class="p-6 space-y-4">
+                @csrf
+                @method('PUT')
+                <input type="hidden" name="_form_ia_documentos" value="1">
+
+                <div class="flex flex-wrap gap-2 text-xs">
+                    <span class="text-gray-500 self-center">Preencher com:</span>
+                    <button type="button" @click="usar('http://localhost:11434/v1/chat/completions', 'qwen2.5:0.5b')"
+                            class="px-2.5 py-1 rounded-full border border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+                            title="IA instalada no próprio servidor: gratuita, sem limite, sem chave e os dados não saem do servidor">Ollama no servidor (100% gratuito)</button>
+                    <button type="button" @click="usar('https://api.groq.com/openai/v1/chat/completions', 'llama-3.3-70b-versatile')"
+                            class="px-2.5 py-1 rounded-full border border-gray-300 hover:bg-gray-50">Groq (gratuito)</button>
+                    <button type="button" @click="usar('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', 'gemini-2.5-flash')"
+                            class="px-2.5 py-1 rounded-full border border-gray-300 hover:bg-gray-50">Google Gemini (gratuito)</button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">URL da API (compatível com OpenAI)</label>
+                        <input type="url" name="ia_documentos_api_url" x-ref="url" value="{{ $iaDocumentos['url'] }}"
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                               placeholder="https://api.groq.com/openai/v1/chat/completions">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Modelo</label>
+                        <input type="text" name="ia_documentos_model" x-ref="modelo" value="{{ $iaDocumentos['model'] }}"
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                               placeholder="llama-3.3-70b-versatile">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Chave da API <span class="font-normal text-gray-400">(não precisa para o Ollama)</span></label>
+                        <input type="password" name="ia_documentos_api_key" autocomplete="new-password"
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                               placeholder="{{ $iaDocumentos['tem_chave'] ? '•••••••• (salva — deixe em branco para manter)' : 'Cole a chave aqui' }}">
+                        @if($iaDocumentos['tem_chave'])
+                        <label class="mt-1 inline-flex items-center gap-1.5 text-xs text-gray-500">
+                            <input type="checkbox" name="ia_documentos_remover_chave" value="1" class="rounded border-gray-300"> Remover chave salva
+                        </label>
+                        @endif
+                    </div>
+                </div>
+
+                <div x-show="resultado" x-cloak class="rounded-lg border px-4 py-3 text-sm"
+                     :class="resultado?.ok ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-800'">
+                    <p class="font-semibold" x-text="resultado?.ok ? 'Conexão funcionando' : ('Falhou na etapa: ' + (resultado?.etapa || ''))"></p>
+                    <p class="mt-0.5 break-words" x-text="resultado?.mensagem"></p>
+                    <p class="mt-0.5 text-xs opacity-75" x-show="resultado?.origem" x-text="resultado?.origem === 'documentos' ? 'Usando a configuração desta seção.' : 'Usando a configuração geral de IA (esta seção está incompleta).'"></p>
+                </div>
+
+                <div class="flex flex-wrap justify-end gap-3 pt-2 border-t border-gray-100">
+                    <button type="button" @click="testar()" :disabled="testando"
+                            class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                        <span x-text="testando ? 'Testando…' : 'Testar conexão (configuração salva)'"></span>
+                    </button>
+                    <button type="submit" class="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">Salvar</button>
+                </div>
+            </form>
+        </div>
     </div>
 
     {{-- ============================================================ --}}

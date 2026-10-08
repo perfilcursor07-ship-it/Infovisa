@@ -17,17 +17,17 @@ trait LeDocumentoComIa
      */
     protected function jsonDaIa(string $instrucao, string $texto, string $documento): ?array
     {
-        $apiKey = ConfiguracaoSistema::where('chave', 'ia_api_key')->value('valor');
-        $apiUrl = ConfiguracaoSistema::where('chave', 'ia_api_url')->value('valor');
-        $modelo = ConfiguracaoSistema::where('chave', 'ia_model')->value('valor');
+        ['url' => $apiUrl, 'key' => $apiKey, 'model' => $modelo] = self::configuracaoIaDocumentos();
 
-        if (!$apiKey || !$apiUrl || !$modelo || mb_strlen($texto) < 10) {
+        // IA local (Ollama no próprio servidor) não precisa de chave
+        if (!$apiUrl || !$modelo || (!$apiKey && !self::urlLocal($apiUrl)) || mb_strlen($texto) < 10) {
             return null;
         }
 
         try {
-            $resposta = Http::withHeaders(['Authorization' => 'Bearer ' . $apiKey])
-                ->timeout(25)
+            $resposta = Http::withHeaders(['Authorization' => 'Bearer ' . ($apiKey ?: 'local')])
+                ->connectTimeout(8)
+                ->timeout(self::urlLocal($apiUrl) ? 90 : 25)
                 ->post($apiUrl, [
                     'model' => $modelo,
                     'temperature' => 0,
@@ -54,6 +54,43 @@ trait LeDocumentoComIa
             Log::warning("Leitura de {$documento}: falha ao chamar a IA", ['erro' => $e->getMessage()]);
             return null;
         }
+    }
+
+    /**
+     * API usada na leitura de documentos: a configuração própria (ia_documentos_*), se preenchida;
+     * senão, a configuração geral de IA do sistema.
+     *
+     * @return array{url: ?string, key: ?string, model: ?string, origem: string}
+     */
+    public static function configuracaoIaDocumentos(): array
+    {
+        $valor = fn (string $chave) => trim((string) ConfiguracaoSistema::where('chave', $chave)->value('valor')) ?: null;
+
+        $propria = [
+            'url' => $valor('ia_documentos_api_url'),
+            'key' => $valor('ia_documentos_api_key'),
+            'model' => $valor('ia_documentos_model'),
+        ];
+        if ($propria['url'] && $propria['model'] && ($propria['key'] || self::urlLocal($propria['url']))) {
+            return $propria + ['origem' => 'documentos'];
+        }
+
+        return [
+            'url' => $valor('ia_api_url'),
+            'key' => $valor('ia_api_key'),
+            'model' => $valor('ia_model'),
+            'origem' => 'geral',
+        ];
+    }
+
+    /**
+     * IA rodando no próprio servidor (ex.: Ollama em localhost:11434).
+     */
+    public static function urlLocal(?string $url): bool
+    {
+        $host = strtolower((string) parse_url((string) $url, PHP_URL_HOST));
+
+        return in_array($host, ['localhost', '127.0.0.1', '::1', '[::1]'], true);
     }
 
     /**

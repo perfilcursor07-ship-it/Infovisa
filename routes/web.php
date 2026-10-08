@@ -817,6 +817,7 @@ Route::middleware(['auth:interno', 'no-cache-auth'])->prefix('admin')->name('adm
             Route::get('/', [\App\Http\Controllers\Admin\ConfiguracaoSistemaController::class, 'index'])->name('index');
             Route::put('/', [\App\Http\Controllers\Admin\ConfiguracaoSistemaController::class, 'update'])->name('update');
             Route::post('/permissoes-sigiloso', [\App\Http\Controllers\Admin\ConfiguracaoSistemaController::class, 'salvarPermissoesSigiloso'])->name('salvar-permissoes-sigiloso');
+            Route::post('/testar-ia-documentos', [\App\Http\Controllers\Admin\ConfiguracaoSistemaController::class, 'testarIaDocumentos'])->middleware('throttle:10,1')->name('testar-ia-documentos');
         });
         
         // Documentos POPs/IA - Apenas Admin

@@ -45,6 +45,11 @@ class ConfiguracaoSistemaController extends Controller
         $iaApiUrl = ConfiguracaoSistema::where('chave', 'ia_api_url')->first();
         $iaModel = ConfiguracaoSistema::where('chave', 'ia_model')->first();
         $iaBuscaWeb = ConfiguracaoSistema::where('chave', 'ia_busca_web')->first();
+        $iaDocumentos = [
+            'url' => ConfiguracaoSistema::where('chave', 'ia_documentos_api_url')->value('valor'),
+            'model' => ConfiguracaoSistema::where('chave', 'ia_documentos_model')->value('valor'),
+            'tem_chave' => filled(ConfiguracaoSistema::where('chave', 'ia_documentos_api_key')->value('valor')),
+        ];
         
         // Configurações do Chat Interno
         $chatInternoAtivo = ConfiguracaoSistema::where('chave', 'chat_interno_ativo')->first();
@@ -69,8 +74,69 @@ class ConfiguracaoSistemaController extends Controller
             'chatInternoAtivo',
             'assistenteRedacaoAtivo',
             'iaPesquisaSatisfacaoAtiva',
-            'iaPesquisaSatisfacaoPrompt'
+            'iaPesquisaSatisfacaoPrompt',
+            'iaDocumentos'
         ));
+    }
+
+    /**
+     * Testa a IA usada na leitura de documentos (diagnóstico de rede/chave/modelo).
+     */
+    public function testarIaDocumentos()
+    {
+        $config = \App\Services\LeitorCarteiraConselhoService::configuracaoIaDocumentos();
+        $local = \App\Services\LeitorCarteiraConselhoService::urlLocal($config['url']);
+        if (!$config['url'] || !$config['model'] || (!$config['key'] && !$local)) {
+            return response()->json(['ok' => false, 'etapa' => 'configuração', 'mensagem' => 'Preencha URL, modelo e chave (a chave é dispensada só para IA local) e salve antes de testar.']);
+        }
+
+        $host = parse_url($config['url'], PHP_URL_HOST);
+        $inicio = microtime(true);
+
+        try {
+            $resposta = \Illuminate\Support\Facades\Http::withHeaders(['Authorization' => 'Bearer ' . ($config['key'] ?: 'local')])
+                ->connectTimeout(8)
+                ->timeout($local ? 90 : 20)
+                ->post($config['url'], [
+                    'model' => $config['model'],
+                    'temperature' => 0,
+                    'max_tokens' => 20,
+                    'messages' => [['role' => 'user', 'content' => 'Responda apenas: {"ok":true}']],
+                ]);
+        } catch (\Throwable $e) {
+            $msg = $e->getMessage();
+            $etapa = $local && str_contains($msg, 'Failed to connect') ? 'IA local (o Ollama não está rodando no servidor)'
+                : (str_contains($msg, 'Could not resolve') ? 'DNS'
+                : (str_contains($msg, 'SSL') || str_contains($msg, 'TLS') || str_contains($msg, 'timed out') ? 'conexão/TLS (firewall ou proxy)' : 'conexão'));
+
+            return response()->json([
+                'ok' => false,
+                'etapa' => $etapa,
+                'mensagem' => "O servidor não conseguiu falar com {$host}: " . mb_substr($msg, 0, 300),
+                'ms' => (int) ((microtime(true) - $inicio) * 1000),
+                'origem' => $config['origem'],
+            ]);
+        }
+
+        $ms = (int) ((microtime(true) - $inicio) * 1000);
+        if (!$resposta->successful()) {
+            $detalhe = data_get($resposta->json(), 'error.message') ?? mb_substr($resposta->body(), 0, 300);
+            $etapa = match (true) {
+                in_array($resposta->status(), [401, 403], true) => 'chave da API',
+                in_array($resposta->status(), [400, 404], true) => 'modelo ou URL',
+                $resposta->status() === 429 => 'limite do plano gratuito',
+                default => 'resposta da API',
+            };
+
+            return response()->json(['ok' => false, 'etapa' => $etapa, 'mensagem' => "HTTP {$resposta->status()}: {$detalhe}", 'ms' => $ms, 'origem' => $config['origem']]);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'mensagem' => "Conectado a {$host} com o modelo {$config['model']} em {$ms} ms.",
+            'resposta' => mb_substr((string) data_get($resposta->json(), 'choices.0.message.content', ''), 0, 120),
+            'origem' => $config['origem'],
+        ]);
     }
 
     /**
@@ -104,8 +170,30 @@ class ConfiguracaoSistemaController extends Controller
             'ia_api_url.url' => 'A URL da API deve ser válida',
         ]);
         
+        // IA da leitura de documentos do receituário (configuração separada do assistente)
+        if ($request->has('_form_ia_documentos')) {
+            $dados = $request->validate([
+                'ia_documentos_api_url' => 'nullable|url|max:500',
+                'ia_documentos_model' => 'nullable|string|max:200',
+                'ia_documentos_api_key' => 'nullable|string|max:500',
+            ], ['ia_documentos_api_url.url' => 'A URL da API de leitura de documentos deve ser válida.']);
+
+            ConfiguracaoSistema::updateOrCreate(['chave' => 'ia_documentos_api_url'], ['valor' => trim((string) ($dados['ia_documentos_api_url'] ?? ''))]);
+            ConfiguracaoSistema::updateOrCreate(['chave' => 'ia_documentos_model'], ['valor' => trim((string) ($dados['ia_documentos_model'] ?? ''))]);
+            // Chave em branco mantém a atual; "remover" apaga
+            if ($request->boolean('ia_documentos_remover_chave')) {
+                ConfiguracaoSistema::updateOrCreate(['chave' => 'ia_documentos_api_key'], ['valor' => '']);
+            } elseif (filled($dados['ia_documentos_api_key'] ?? null)) {
+                ConfiguracaoSistema::updateOrCreate(['chave' => 'ia_documentos_api_key'], ['valor' => trim($dados['ia_documentos_api_key'])]);
+            }
+
+            return redirect()
+                ->to(route('admin.configuracoes.sistema.index') . '#inteligencia-artificial')
+                ->with('success', 'Configuração da IA de leitura de documentos atualizada.');
+        }
+
         // Identifica qual formulário foi submetido baseado nos campos presentes
-        $isFormularioIA = $request->has('_form_ia') || 
+        $isFormularioIA = $request->has('_form_ia') ||
                           $request->filled('ia_api_key') || 
                           $request->filled('ia_api_url') || 
                           $request->filled('ia_model');
