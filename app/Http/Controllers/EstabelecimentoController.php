@@ -152,7 +152,8 @@ class EstabelecimentoController extends Controller
     {
         $usuarioInterno = auth('interno')->user();
 
-        $query = Estabelecimento::query();
+        // Cadastro interno de receituário não aparece na lista de estabelecimentos
+        $query = Estabelecimento::query()->where('oculto_receituario', false);
 
         if (auth('externo')->check()) {
             $query->doUsuario(auth('externo')->id());
@@ -224,7 +225,7 @@ class EstabelecimentoController extends Controller
         // Estatísticas
         if ($aplicarFiltroEscopo) {
             // Para usuários não-admin, conta baseado nos estabelecimentos filtrados
-            $todosParaStats = Estabelecimento::query();
+            $todosParaStats = Estabelecimento::query()->where('oculto_receituario', false);
             if (auth('interno')->check()) {
                 $todosParaStats->paraUsuario($usuarioInterno);
                 $this->aplicarFiltroTerritorialEstabelecimentos($todosParaStats, $usuarioInterno);
@@ -241,7 +242,7 @@ class EstabelecimentoController extends Controller
             ];
         } else {
             $baseQuery = function() use ($usuarioInterno) {
-                $q = Estabelecimento::query();
+                $q = Estabelecimento::query()->where('oculto_receituario', false);
                 if (auth('interno')->check()) {
                     $q->paraUsuario($usuarioInterno);
                     $this->aplicarFiltroTerritorialEstabelecimentos($q, $usuarioInterno);
@@ -2164,7 +2165,7 @@ class EstabelecimentoController extends Controller
         $cpf = preg_replace('/\D/', '', $cpf);
         
         // Busca estabelecimento por CPF
-        $estabelecimento = Estabelecimento::where('cpf', $cpf)->first();
+        $estabelecimento = Estabelecimento::where('cpf', $cpf)->where('oculto_receituario', false)->first();
         
         if ($estabelecimento) {
             return response()->json([

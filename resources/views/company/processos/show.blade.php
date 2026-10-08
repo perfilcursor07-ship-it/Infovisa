@@ -105,6 +105,13 @@
             $proximoPasso = ['tom' => 'red', 'titulo' => 'Corrija ' . $documentosRejeitados->count() . ' arquivo(s) rejeitado(s)', 'texto' => 'Veja o motivo e reenvie a versão corrigida.', 'acao' => 'rejeitados'];
         } elseif ($documentosComPrazo->count() > 0) {
             $proximoPasso = ['tom' => 'orange', 'titulo' => 'Responda ' . $documentosComPrazo->count() . ' documento(s) com prazo', 'texto' => 'Abra o documento e anexe sua resposta dentro do prazo.', 'acao' => 'prazos'];
+        } elseif ($isProcessoReceituario ?? false) {
+            $requisicoesEmAnalise = $requisicoesReceituario->whereIn('status', ['enviada', 'em_analise'])->count();
+            $proximoPasso = match (true) {
+                !$receituarioAprovado => ['tom' => 'amber', 'titulo' => 'Cadastro de receituário em análise', 'texto' => 'Após a aprovação do cadastro você poderá solicitar notificações de receita.', 'acao' => null],
+                $requisicoesEmAnalise > 0 => ['tom' => 'amber', 'titulo' => $requisicoesEmAnalise . ' requisição(ões) aguardando a Vigilância', 'texto' => 'Acompanhe a liberação abaixo. Você pode fazer novos pedidos quando precisar.', 'acao' => 'requisicao'],
+                default => ['tom' => 'blue', 'titulo' => 'Solicite notificações de receita', 'texto' => 'Faça uma requisição informando os tipos e quantidades de blocos.', 'acao' => 'requisicao'],
+            };
         } elseif ($totalObrigatorios > 0 && $faltam > 0) {
             $proximoPasso = ['tom' => 'blue', 'titulo' => 'Envie ' . $faltam . ' documento(s) obrigatório(s)', 'texto' => 'O processo segue para análise após o envio de todos.', 'acao' => 'upload'];
         } elseif ($aguardandoAprovacao > 0) {
@@ -151,7 +158,10 @@
                             <dt class="sr-only">Estabelecimento</dt>
                             <svg class="w-3.5 h-3.5 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4M9 9v.01M9 12v.01M9 15v.01M9 18v.01"/></svg>
                             <dd class="truncate max-w-[16rem]">
-                                <a href="{{ route('company.estabelecimentos.show', $processo->estabelecimento->id) }}" class="font-medium text-slate-700 hover:text-blue-700 hover:underline underline-offset-2"
+                                {{-- Processo de receituário: o "estabelecimento" é o cadastro interno do profissional --}}
+                                <a href="{{ $processo->estabelecimento->oculto_receituario && $processo->estabelecimento->receituario
+                                        ? route('company.receituarios.show', ['id' => $processo->estabelecimento->receituario->id, 'aba' => 'processos'])
+                                        : route('company.estabelecimentos.show', $processo->estabelecimento->id) }}" class="font-medium text-slate-700 hover:text-blue-700 hover:underline underline-offset-2"
                                    title="{{ $processo->estabelecimento->nome_fantasia ?: $processo->estabelecimento->razao_social }}">
                                     {{ $processo->estabelecimento->nome_fantasia ?: $processo->estabelecimento->razao_social }}
                                 </a>
@@ -193,27 +203,9 @@
                 </div>
             </div>
 
-            {{-- Ações rápidas --}}
+            {{-- Ações específicas do cabeçalho --}}
+            @if(!$processoArquivado && isset($tipoProcessoTemUnidades) && $tipoProcessoTemUnidades)
             <div class="flex flex-wrap items-center gap-1.5 lg:flex-shrink-0">
-                <button type="button" @click="modalAlertas = true"
-                        class="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition">
-                    <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
-                    </svg>
-                    Alertas
-                    @if($alertasPendentesCount > 0)
-                    <span class="min-w-[1.125rem] h-[1.125rem] px-1 inline-flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full">{{ $alertasPendentesCount }}</span>
-                    @endif
-                </button>
-                <a href="{{ route('company.processos.protocolo', $processo->id) }}" target="_blank" title="Comprovante de abertura do processo"
-                   class="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition">
-                    <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
-                    </svg>
-                    Protocolo
-                </a>
-                @if(!$processoArquivado)
-                @if(isset($tipoProcessoTemUnidades) && $tipoProcessoTemUnidades)
                 <button type="button" @click="$refs.modalNovaUnidade.classList.remove('hidden')"
                         class="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition">
                     <svg class="w-4 h-4 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -221,16 +213,8 @@
                     </svg>
                     Nova Unidade
                 </button>
-                @endif
-                <button type="button" @click="modalUpload = true"
-                        class="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-sm transition">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
-                    </svg>
-                    Enviar Arquivo
-                </button>
-                @endif
             </div>
+            @endif
         </div>
 
         @if($processo->observacoes)
@@ -259,12 +243,7 @@
                 <span class="text-slate-600"> — {{ $proximoPasso['texto'] }}</span>
             </p>
         </div>
-        @if($proximoPasso['acao'] === 'upload')
-        <button type="button" @click="modalUpload = true"
-                class="self-start sm:self-auto flex-shrink-0 inline-flex items-center gap-1 h-7 px-3 text-xs font-semibold text-white rounded-md transition {{ $tomPasso['botao'] }}">
-            Enviar documentos
-        </button>
-        @elseif($proximoPasso['acao'] === 'rejeitados')
+        @if($proximoPasso['acao'] === 'rejeitados')
         <a href="#secao-rejeitados"
            class="self-start sm:self-auto flex-shrink-0 inline-flex items-center gap-1 h-7 px-3 text-xs font-semibold text-white rounded-md transition {{ $tomPasso['botao'] }}">
             Ver rejeitados
@@ -484,10 +463,14 @@
     </div>
     @endif
 
-    {{-- Layout 2 colunas: Painel lateral (esquerda) + Conteúdo (direita) --}}
+    {{-- Layout 2 colunas: painel lateral à esquerda + conteúdo principal à direita --}}
     <div class="grid grid-cols-1 xl:grid-cols-[18rem_minmax(0,1fr)] gap-5 items-start">
         {{-- Coluna Principal --}}
         <div class="space-y-5 min-w-0">
+            @if($isProcessoReceituario ?? false)
+                @include('company.processos.partials.receituario-requisicoes')
+            @endif
+
             {{-- Alerta de Documentos com Prazo + Upload Inline --}}
             @if($documentosComPrazo->count() > 0)
             <section id="secao-prazos" x-data="{ uploadAberto: null, enviando: false }" class="scroll-mt-4 bg-white rounded-xl border border-orange-200 shadow-sm overflow-hidden">
@@ -707,6 +690,8 @@
             @php
                 $totalDocumentos = isset($todosDocumentos) ? $todosDocumentos->count() : 0;
             @endphp
+            {{-- Receituário: a seção só aparece quando houver documento ou arquivo --}}
+            @unless(($isProcessoReceituario ?? false) && $totalDocumentos === 0)
             <section class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden" x-data="{ pastaAtiva: null }">
                 <header class="px-4 py-2.5 flex items-center gap-2 border-b border-slate-100">
                     <svg class="w-4 h-4 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -714,14 +699,6 @@
                     </svg>
                     <h2 class="text-sm font-semibold text-slate-900">Documentos do processo</h2>
                     <span class="px-1.5 py-0.5 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-full leading-none">{{ $totalDocumentos }}</span>
-                    @if($processo->status !== 'arquivado')
-                    <button @click="modalUpload = true" class="ml-auto inline-flex items-center gap-1 h-7 px-2.5 text-xs font-medium text-blue-700 hover:bg-blue-50 rounded-md transition-colors">
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                        </svg>
-                        Enviar arquivo
-                    </button>
-                    @endif
                 </header>
 
                 {{-- Abas de Pastas --}}
@@ -1092,18 +1069,86 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
                     </svg>
                     <p class="mt-2 text-sm text-slate-600">Nenhum documento no processo</p>
-                    @if($processo->status !== 'arquivado')
-                    <button @click="modalUpload = true" class="mt-1 text-sm text-blue-600 hover:text-blue-700 font-medium">
-                        Enviar primeiro arquivo →
-                    </button>
-                    @endif
                 </div>
                 @endif
             </section>
+            @endunless
         </div>
 
         {{-- Painel lateral --}}
         <aside class="xl:order-first grid grid-cols-1 md:grid-cols-2 xl:grid-cols-1 gap-5 items-start">
+            {{-- Ações do processo --}}
+            <section class="bg-white rounded-xl border border-slate-200 shadow-sm">
+                <h2 class="px-4 pt-3 pb-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Ações</h2>
+                <div class="px-2 pb-2 space-y-0.5">
+                    <button type="button" @click="modalAlertas = true"
+                            class="group w-full flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-slate-700 rounded-lg hover:bg-slate-50 transition-colors text-left">
+                        <svg class="w-[18px] h-[18px] text-slate-400 group-hover:text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                        </svg>
+                        <span class="flex-1">Alertas</span>
+                        @if($alertasPendentesCount > 0)
+                        <span class="min-w-[1.25rem] h-5 px-1 inline-flex items-center justify-center bg-red-100 text-red-700 text-[10px] font-bold rounded-full">{{ $alertasPendentesCount }}</span>
+                        @endif
+                    </button>
+                    <a href="{{ route('company.processos.protocolo', $processo->id) }}" target="_blank" rel="noopener"
+                       title="Comprovante de abertura do processo"
+                       class="group flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-slate-700 rounded-lg hover:bg-slate-50 transition-colors">
+                        <svg class="w-[18px] h-[18px] text-slate-400 group-hover:text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+                        </svg>
+                        Protocolo
+                    </a>
+                    @if(!$processoArquivado && ($isProcessoReceituario ?? false) && $receituarioAprovado)
+                    <a href="{{ route('company.processos.receituario-requisicoes.create', $processo->id) }}"
+                       class="group flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-slate-700 rounded-lg hover:bg-slate-50 transition-colors">
+                        <svg class="w-[18px] h-[18px] text-slate-400 group-hover:text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14m-7-7h14"/>
+                        </svg>
+                        Nova requisição
+                    </a>
+                    @endif
+                    {{-- Receituário: envio de ofício/documento pela empresa desativado por enquanto.
+                         Para reativar, troque a condição abaixo por: @if(!$processoArquivado) --}}
+                    @if(!$processoArquivado && !($isProcessoReceituario ?? false))
+                    <button type="button" @click="modalUpload = true"
+                            class="group w-full flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-slate-700 rounded-lg hover:bg-slate-50 transition-colors text-left">
+                        <svg class="w-[18px] h-[18px] text-slate-400 group-hover:text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                        </svg>
+                        {{ ($isProcessoReceituario ?? false) ? 'Enviar ofício/documento' : 'Enviar arquivo' }}
+                    </button>
+                    @endif
+                </div>
+            </section>
+
+            @if($isProcessoReceituario ?? false)
+            {{-- Resumo das requisições de receituário --}}
+            @php
+                $contagemRequisicoes = [
+                    ['rotulo' => 'Aguardando', 'total' => $requisicoesReceituario->whereIn('status', ['enviada', 'em_analise'])->count(), 'cor' => 'text-amber-600'],
+                    ['rotulo' => 'Liberadas', 'total' => $requisicoesReceituario->where('status', 'liberada')->count(), 'cor' => 'text-emerald-600'],
+                    ['rotulo' => 'Indeferidas', 'total' => $requisicoesReceituario->where('status', 'indeferida')->count(), 'cor' => 'text-red-600'],
+                ];
+            @endphp
+            <div class="bg-white rounded-xl border border-slate-200 shadow-sm">
+                <div class="px-4 py-3">
+                    <div class="flex items-center justify-between mb-1">
+                        <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Requisições</h3>
+                        <span class="text-xs font-semibold text-slate-700 tabular-nums">{{ $requisicoesReceituario->where('status', '!=', 'cancelada')->count() }}</span>
+                    </div>
+                    <p class="text-xs text-slate-500">Pedidos de notificação e numeração de receita deste processo.</p>
+                </div>
+                <div class="grid grid-cols-3 border-t border-slate-100 divide-x divide-slate-100 text-center">
+                    @foreach($contagemRequisicoes as $item)
+                    <a href="#secao-requisicoes" class="py-2 hover:bg-slate-50 transition-colors">
+                        <p class="text-sm font-semibold tabular-nums {{ $item['total'] ? $item['cor'] : 'text-slate-400' }}">{{ $item['total'] }}</p>
+                        <p class="text-[10px] text-slate-500">{{ $item['rotulo'] }}</p>
+                    </a>
+                    @endforeach
+                </div>
+            </div>
+            @else
             {{-- Resumo / Documentos Obrigatórios --}}
             <div class="bg-white rounded-xl border border-slate-200 shadow-sm">
                 <div class="px-4 py-3">
@@ -1141,7 +1186,6 @@
                         @else
                         <div class="flex items-center justify-between gap-2">
                             <p class="text-xs text-slate-600"><span class="font-semibold text-amber-600">{{ $faltam }}</span> pendente(s) de envio</p>
-                            <button @click="modalUpload = true" class="text-xs text-blue-600 hover:text-blue-700 font-medium">Enviar →</button>
                         </div>
                         @endif
                     </div>
@@ -1175,12 +1219,13 @@
                         <p id="pendentes-count-resumo" class="text-sm font-semibold text-amber-600 tabular-nums">{{ $documentosPendentes->count() }}</p>
                         <p class="text-[10px] text-slate-500">Em análise</p>
                     </div>
-                    <button type="button" @click="modalAlertas = true" class="py-2 hover:bg-slate-50 transition-colors rounded-br-xl">
+                    <div class="py-2">
                         <p class="text-sm font-semibold text-orange-600 tabular-nums">{{ $alertasPendentesCount }}</p>
                         <p class="text-[10px] text-slate-500">Alertas</p>
-                    </button>
+                    </div>
                 </div>
             </div>
+            @endif
 
             {{-- Documentos de Ajuda --}}
             @if(isset($documentosAjuda) && $documentosAjuda->count() > 0)
@@ -1209,7 +1254,7 @@
     </div>
 
     {{-- Modal Upload --}}
-    @include('company.processos.partials.modal-upload')
+    @include('company.processos.partials.modal-upload', ['somenteDiversos' => $isProcessoReceituario ?? false])
 
     {{-- Modal Nova Unidade --}}
     @if(isset($tipoProcessoTemUnidades) && $tipoProcessoTemUnidades)

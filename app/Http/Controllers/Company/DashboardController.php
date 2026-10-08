@@ -25,13 +25,15 @@ class DashboardController extends Controller
             })
             ->orderBy('created_at', 'desc')
             ->get();
-        
+        // Cadastro interno de receituário: os processos contam, mas não aparece como estabelecimento
+        $estabelecimentosVisiveis = $estabelecimentos->where('oculto_receituario', false);
+
         // Estatísticas de estabelecimentos
         $estatisticasEstabelecimentos = [
-            'total' => $estabelecimentos->count(),
-            'pendentes' => $estabelecimentos->where('status', 'pendente')->count(),
-            'aprovados' => $estabelecimentos->where('status', 'aprovado')->count(),
-            'rejeitados' => $estabelecimentos->where('status', 'rejeitado')->count(),
+            'total' => $estabelecimentosVisiveis->count(),
+            'pendentes' => $estabelecimentosVisiveis->where('status', 'pendente')->count(),
+            'aprovados' => $estabelecimentosVisiveis->where('status', 'aprovado')->count(),
+            'rejeitados' => $estabelecimentosVisiveis->where('status', 'rejeitado')->count(),
         ];
         
         // IDs dos estabelecimentos do usuário
@@ -57,7 +59,7 @@ class DashboardController extends Controller
         ];
         
         // Últimos 5 estabelecimentos
-        $ultimosEstabelecimentos = $estabelecimentos->take(5);
+        $ultimosEstabelecimentos = $estabelecimentosVisiveis->take(5);
         
         // Últimos 5 processos
         $ultimosProcessos = $processos->take(5);

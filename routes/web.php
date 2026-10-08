@@ -95,6 +95,25 @@ Route::middleware(['auth:externo', 'no-cache-auth'])->prefix('company')->name('c
     Route::put('/perfil/dados', [\App\Http\Controllers\Company\PerfilController::class, 'updateDados'])->name('perfil.update-dados');
     Route::put('/perfil/senha', [\App\Http\Controllers\Company\PerfilController::class, 'updateSenha'])->name('perfil.update-senha');
     
+    // Receituários (solicitação pela empresa / profissional)
+    Route::prefix('receituarios')->name('receituarios.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Company\ReceituarioController::class, 'index'])->name('index');
+        Route::get('create', [\App\Http\Controllers\Company\ReceituarioController::class, 'create'])->name('create');
+        Route::post('/', [\App\Http\Controllers\Company\ReceituarioController::class, 'store'])->name('store');
+        Route::get('buscar-cnpj', [\App\Http\Controllers\Company\ReceituarioController::class, 'buscarCnpj'])->name('buscar-cnpj');
+        Route::post('ler-carteira', [\App\Http\Controllers\Company\ReceituarioController::class, 'lerCarteira'])->middleware('throttle:20,1')->name('ler-carteira');
+        Route::get('{id}/carteira/{lado?}', [\App\Http\Controllers\Company\ReceituarioController::class, 'carteira'])->whereNumber('id')->whereIn('lado', ['frente', 'verso'])->name('carteira');
+        Route::post('ler-comprovante', [\App\Http\Controllers\Company\ReceituarioController::class, 'lerComprovante'])->middleware('throttle:20,1')->name('ler-comprovante');
+        Route::get('{id}/comprovante-endereco', [\App\Http\Controllers\Company\ReceituarioController::class, 'comprovante'])->whereNumber('id')->name('comprovante');
+        Route::get('{id}/pdf-gerado', [\App\Http\Controllers\Company\ReceituarioController::class, 'pdfGerado'])->whereNumber('id')->name('pdf-gerado');
+        Route::get('{id}/pdf', [\App\Http\Controllers\Company\ReceituarioController::class, 'gerarPdf'])->whereNumber('id')->name('gerar-pdf');
+        Route::get('{id}/corrigir/{documento}', [\App\Http\Controllers\Company\ReceituarioController::class, 'corrigir'])->whereNumber('id')->whereIn('documento', ['carteira', 'comprovante'])->name('corrigir');
+        Route::post('{id}/corrigir/{documento}', [\App\Http\Controllers\Company\ReceituarioController::class, 'salvarCorrecao'])->whereNumber('id')->whereIn('documento', ['carteira', 'comprovante'])->name('salvar-correcao');
+        Route::get('{id}/documento-assinado', [\App\Http\Controllers\Company\ReceituarioController::class, 'documentoAssinado'])->whereNumber('id')->name('documento-assinado');
+        Route::post('{id}/processos', [\App\Http\Controllers\Company\ReceituarioController::class, 'abrirProcesso'])->whereNumber('id')->name('abrir-processo');
+        Route::get('{id}', [\App\Http\Controllers\Company\ReceituarioController::class, 'show'])->whereNumber('id')->name('show');
+    });
+
     // Estabelecimentos
     Route::get('/estabelecimentos', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'index'])->name('estabelecimentos.index');
     Route::get('/estabelecimentos/create', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'create'])->name('estabelecimentos.create');
@@ -160,6 +179,11 @@ Route::middleware(['auth:externo', 'no-cache-auth'])->prefix('company')->name('c
     Route::get('/processos', [\App\Http\Controllers\Company\ProcessoController::class, 'index'])->name('processos.index');
     Route::get('/processos/{id}', [\App\Http\Controllers\Company\ProcessoController::class, 'show'])->name('processos.show');
     Route::post('/processos/{id}/upload', [\App\Http\Controllers\Company\ProcessoController::class, 'uploadDocumento'])->name('processos.upload');
+    // Requisições de notificação/numeração de receita (somente processos de receituário)
+    Route::get('/processos/{id}/requisicoes-receituario/nova', [\App\Http\Controllers\Company\ReceituarioRequisicaoController::class, 'create'])->name('processos.receituario-requisicoes.create');
+    Route::post('/processos/{id}/requisicoes-receituario', [\App\Http\Controllers\Company\ReceituarioRequisicaoController::class, 'store'])->name('processos.receituario-requisicoes.store');
+    Route::get('/processos/{id}/requisicoes-receituario/{requisicao}', [\App\Http\Controllers\Company\ReceituarioRequisicaoController::class, 'show'])->name('processos.receituario-requisicoes.show');
+    Route::post('/processos/{id}/requisicoes-receituario/{requisicao}/cancelar', [\App\Http\Controllers\Company\ReceituarioRequisicaoController::class, 'cancelar'])->name('processos.receituario-requisicoes.cancelar');
     Route::post('/processos/{id}/adicionar-unidade', [\App\Http\Controllers\Company\ProcessoController::class, 'adicionarUnidade'])->name('processos.adicionar-unidade');
     Route::get('/processos/{id}/documentos/{documento}/download', [\App\Http\Controllers\Company\ProcessoController::class, 'downloadDocumento'])->name('processos.download');
     Route::get('/processos/{id}/documentos/{documento}/visualizar', [\App\Http\Controllers\Company\ProcessoController::class, 'visualizarDocumento'])->name('processos.documento.visualizar');
@@ -599,11 +623,15 @@ Route::middleware(['auth:interno', 'no-cache-auth'])->prefix('admin')->name('adm
         Route::get('buscar-cnpj', [\App\Http\Controllers\ReceituarioController::class, 'buscarCnpj'])->name('buscar-cnpj');
         Route::get('{id}/pdf-gerado', [\App\Http\Controllers\ReceituarioController::class, 'pdfGerado'])->name('pdf-gerado');
         Route::get('{id}/pdf', [\App\Http\Controllers\ReceituarioController::class, 'gerarPdf'])->name('gerar-pdf');
+        Route::get('{id}/carteira/{lado?}', [\App\Http\Controllers\ReceituarioController::class, 'carteira'])->whereIn('lado', ['frente', 'verso'])->name('carteira');
+        Route::get('{id}/comprovante-endereco', [\App\Http\Controllers\ReceituarioController::class, 'comprovante'])->name('comprovante');
         Route::get('{id}', [\App\Http\Controllers\ReceituarioController::class, 'show'])->name('show');
         Route::get('{id}/edit', [\App\Http\Controllers\ReceituarioController::class, 'edit'])->name('edit');
         Route::put('{id}', [\App\Http\Controllers\ReceituarioController::class, 'update'])->name('update');
         Route::delete('{id}', [\App\Http\Controllers\ReceituarioController::class, 'destroy'])->name('destroy');
         Route::post('{id}/criar-processo', [\App\Http\Controllers\ReceituarioController::class, 'criarProcesso'])->name('criar-processo');
+        Route::post('{id}/documentos/{documento}/analisar', [\App\Http\Controllers\ReceituarioController::class, 'analisarDocumento'])->whereIn('documento', ['carteira', 'comprovante'])->name('documento.analisar');
+        Route::get('{id}/documento-assinado', [\App\Http\Controllers\ReceituarioController::class, 'documentoAssinado'])->name('documento-assinado');
     });
 
     // Usuários Internos

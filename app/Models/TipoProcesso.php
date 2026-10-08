@@ -30,6 +30,7 @@ class TipoProcesso extends Model
         'municipios_descentralizados',
         'municipios_descentralizados_ids',
         'tipo_setor_id',
+        'exclusivo_receituario',
     ];
 
     protected $casts = [
@@ -48,6 +49,7 @@ class TipoProcesso extends Model
         'ordem' => 'integer',
         'municipios_descentralizados' => 'array',
         'municipios_descentralizados_ids' => 'array',
+        'exclusivo_receituario' => 'boolean',
     ];
 
     /**
@@ -176,6 +178,12 @@ class TipoProcesso extends Model
 
     public function disponivelParaEstabelecimento(Estabelecimento $estabelecimento): bool
     {
+        // Processos de receituário só existem no cadastro interno do profissional (área de Receituários),
+        // e esse cadastro só recebe processos de receituário
+        if ($this->exclusivo_receituario || $estabelecimento->oculto_receituario) {
+            return (bool) $this->exclusivo_receituario && (bool) $estabelecimento->oculto_receituario;
+        }
+
         if ($this->isProcessoEspecial()) {
             if ($estabelecimento->possuiSomenteAtividadesEspeciais()) {
                 return $this->estabelecimentoPossuiAtividadeEspecial($estabelecimento);

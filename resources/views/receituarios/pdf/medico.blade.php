@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <title>Ficha Cadastral - Médico/Dentista/Veterinário</title>
     <style>
+        @page {
+            size: A4 portrait;
+            margin: 18mm;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -14,54 +19,67 @@
             font-family: Arial, sans-serif;
             font-size: 11pt;
             line-height: 1.3;
+            color: #111827;
         }
         
         .container {
-            padding: 20px;
+            width: 80%;
+            margin: 0 auto;
+            padding: 12mm 0 10mm;
         }
         
         .header {
             text-align: center;
             font-weight: bold;
-            font-size: 13pt;
-            margin-bottom: 15px;
-            padding: 8px;
-            border: 2px solid #000;
-            background-color: #e0e0e0;
+            font-size: 12pt;
+            line-height: 1.35;
+            margin-bottom: 10px;
+            padding: 10px 12px;
+            border: 1.5px solid #111827;
+            background-color: #eef0f2;
         }
         
         .section-title {
-            background-color: #d0d0d0;
-            padding: 6px;
+            background-color: #e9edf1;
+            padding: 7px 9px;
             font-weight: bold;
-            font-size: 11pt;
+            font-size: 9.5pt;
             text-align: center;
-            border: 1px solid #000;
-            margin-top: 10px;
-            margin-bottom: 5px;
+            text-transform: uppercase;
+            border: 1px solid #4b5563;
+            border-left: 3px solid #111827;
+            margin-top: 11px;
+            margin-bottom: 0;
         }
         
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
+        }
+
+        tr {
+            page-break-inside: avoid;
         }
         
         td {
-            border: 1px solid #000;
-            padding: 6px;
+            border: 1px solid #4b5563;
+            padding: 7px 8px;
             vertical-align: top;
         }
         
         .label {
-            font-size: 9pt;
+            color: #374151;
+            font-size: 8pt;
             font-weight: bold;
-            margin-bottom: 2px;
+            margin-bottom: 3px;
+            text-transform: uppercase;
         }
         
         .value {
-            font-size: 11pt;
-            min-height: 18px;
+            font-size: 10pt;
+            min-height: 17px;
+            overflow-wrap: break-word;
         }
         
         .signature-section {
@@ -73,31 +91,33 @@
         .signature-boxes {
             display: table;
             width: 100%;
-            margin-top: 10px;
+            margin-top: 8px;
         }
         
         .signature-box {
             display: table-cell;
             width: 33.33%;
             text-align: center;
-            padding: 5px;
-            border: 1px solid #000;
+            padding: 6px;
+            border: 1px solid #4b5563;
             height: 120px;
             vertical-align: bottom;
         }
         
         .signature-label {
-            font-size: 9pt;
+            font-size: 8pt;
+            line-height: 1.4;
             margin-top: 5px;
         }
         
         .note {
             font-size: 9pt;
             font-style: italic;
-            margin-top: 10px;
-            padding: 8px;
-            border: 1px solid #000;
-            background-color: #f5f5f5;
+            line-height: 1.4;
+            margin-top: 8px;
+            padding: 8px 9px;
+            border: 1px solid #6b7280;
+            background-color: #f3f4f6;
         }
         
         .two-columns {
@@ -132,6 +152,9 @@
                     <div class="value">{{ $receituario->cpf ?? '' }}</div>
                 </td>
             </tr>
+        </table>
+
+        <table>
             <tr>
                 <td style="width: 40%;">
                     <div class="label">Especialidade:</div>
@@ -146,6 +169,9 @@
                     <div class="value">{{ $receituario->numero_conselho_classe ?? '' }}</div>
                 </td>
             </tr>
+        </table>
+
+        <table>
             <tr>
                 <td style="width: 50%;">
                     <div class="label">Endereço:</div>
@@ -227,15 +253,15 @@
         <div class="signature-boxes">
             <div class="signature-box">
                 <div style="height: 100px;"></div>
-                <div class="signature-label">Assinatura sem carimbar</div>
+                <div class="signature-label"><strong>1ª VIA</strong><br>Assinatura sem carimbar</div>
             </div>
             <div class="signature-box">
                 <div style="height: 100px;"></div>
-                <div class="signature-label">Assinatura sem carimbar</div>
+                <div class="signature-label"><strong>2ª VIA</strong><br>Assinatura sem carimbar</div>
             </div>
             <div class="signature-box">
                 <div style="height: 100px;"></div>
-                <div class="signature-label">Assinatura sem carimbar</div>
+                <div class="signature-label"><strong>3ª VIA</strong><br>Assinatura sem carimbar</div>
             </div>
         </div>
 

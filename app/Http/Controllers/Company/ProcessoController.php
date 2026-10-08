@@ -853,8 +853,15 @@ class ProcessoController extends Controller
         // Pastas do processo
         $pastas = $processo->pastas()->orderBy('ordem')->get();
 
+        // Processo de receituário: a empresa faz requisições (cadastro) e envia apenas documentos diversos
+        $isProcessoReceituario = $processo->isProcessoReceituario();
+        $requisicoesReceituario = $isProcessoReceituario ? $processo->requisicoesReceituario()->get() : collect();
+        $receituarioAprovado = $isProcessoReceituario && (bool) $processo->estabelecimento->receituario?->isAprovado();
+
         // Busca documentos obrigatórios baseados nas atividades exercidas
-        $documentosObrigatorios = $this->buscarDocumentosObrigatoriosParaProcesso($processo);
+        $documentosObrigatorios = $isProcessoReceituario
+            ? collect()
+            : $this->buscarDocumentosObrigatoriosParaProcesso($processo);
 
         // Monta documentos obrigatórios por pasta de unidade
         $documentosObrigatoriosPorUnidade = collect();
@@ -1042,7 +1049,10 @@ class ProcessoController extends Controller
             'unidadesDisponiveis',
             'tipoProcessoTemUnidades',
             'avisoFilaPublica',
-            'avisoFilaPublicaPorUnidade'
+            'avisoFilaPublicaPorUnidade',
+            'isProcessoReceituario',
+            'requisicoesReceituario',
+            'receituarioAprovado'
         ));
     }
 

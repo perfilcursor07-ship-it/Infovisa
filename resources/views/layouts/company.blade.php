@@ -231,6 +231,19 @@
                         <span x-show="showLabels()" class="truncate">Estabelecimentos</span>
                     </a>
 
+                    {{-- Receituários --}}
+                    @php $ativo = request()->routeIs('company.receituarios.*'); @endphp
+                    <a href="{{ route('company.receituarios.index') }}"
+                       title="Receituários"
+                       class="{{ $classeItemMenu }} {{ $ativo ? $classeItemAtivo : $classeItemInativo }}"
+                       :class="!showLabels() ? 'lg:justify-center lg:px-0' : ''">
+                        @if($ativo)<span class="absolute -left-2.5 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-blue-600"></span>@endif
+                        <svg class="w-[18px] h-[18px] flex-shrink-0 {{ $ativo ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-600' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+                        </svg>
+                        <span x-show="showLabels()" class="truncate">Receituários</span>
+                    </a>
+
                     {{-- Processos --}}
                     @php $ativo = request()->routeIs('company.processos.*'); @endphp
                     <a href="{{ route('company.processos.index') }}"

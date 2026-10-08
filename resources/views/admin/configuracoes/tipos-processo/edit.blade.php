@@ -481,6 +481,19 @@
                     </div>
                 </label>
 
+                {{-- Exclusivo da área de Receituários --}}
+                <label class="flex items-start gap-3 p-2.5 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors">
+                    <input type="checkbox"
+                           name="exclusivo_receituario"
+                           id="exclusivo_receituario"
+                           {{ old('exclusivo_receituario', $tipoProcesso->exclusivo_receituario) ? 'checked' : '' }}
+                           class="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                    <div class="flex-1">
+                        <span class="text-sm font-medium text-gray-900">Exclusivo da área de Receituários</span>
+                        <p class="text-xs text-gray-500 mt-0.5">Só pode ser aberto em Receituários, para o profissional com cadastro aprovado. Não aparece na abertura de processo dos estabelecimentos.</p>
+                    </div>
+                </label>
+
                 {{-- Usuário Externo Pode Visualizar --}}
                 <label class="flex items-start gap-3 p-2.5 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors">
                     <input type="checkbox" 

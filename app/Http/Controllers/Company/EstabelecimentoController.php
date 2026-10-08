@@ -24,7 +24,9 @@ class EstabelecimentoController extends Controller
               ->orWhereHas('usuariosVinculados', function($q2) use ($usuarioId) {
                   $q2->where('usuario_externo_id', $usuarioId);
               });
-        });
+        })
+            // Cadastro interno de receituário: os processos dele ficam na área de Receituários
+            ->where('oculto_receituario', false);
     }
 
     /**

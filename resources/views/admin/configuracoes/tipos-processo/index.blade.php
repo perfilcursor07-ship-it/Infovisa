@@ -134,6 +134,9 @@
                                     </svg>
                                     Pode
                                 </span>
+                                @if($tipo->exclusivo_receituario)
+                                    <span class="block mt-1 text-[11px] font-semibold text-violet-700" title="Só pode ser aberto pela área de Receituários">só em Receituários</span>
+                                @endif
                             @else
                                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                                     Não pode

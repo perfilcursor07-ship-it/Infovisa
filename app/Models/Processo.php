@@ -475,7 +475,8 @@ class Processo extends Model
             return $this->getDocumentosObrigatoriosUnidadeMovel();
         }
 
-        $isProcessoEspecial = $tipoProcesso && in_array($tipoProcesso->codigo, ['projeto_arquitetonico', 'analise_rotulagem']);
+        // Projeto, Rotulagem e processos de receituário usam as listas do tipo de processo (sem atividade/CNAE)
+        $isProcessoEspecial = $tipoProcesso && (in_array($tipoProcesso->codigo, ['projeto_arquitetonico', 'analise_rotulagem']) || $tipoProcesso->exclusivo_receituario);
         $atividadesExercidas = $estabelecimento->atividades_exercidas ?? [];
 
         if (!$isProcessoEspecial && empty($atividadesExercidas)) {
@@ -932,6 +933,19 @@ class Processo extends Model
     public function alertas()
     {
         return $this->hasMany(ProcessoAlerta::class)->orderBy('data_alerta', 'asc');
+    }
+
+    /**
+     * Requisições de notificação/numeração de receita (somente processos de receituário)
+     */
+    public function requisicoesReceituario()
+    {
+        return $this->hasMany(ReceituarioRequisicao::class)->orderByDesc('created_at');
+    }
+
+    public function isProcessoReceituario(): bool
+    {
+        return (bool) $this->tipoProcesso?->exclusivo_receituario;
     }
 
     /**

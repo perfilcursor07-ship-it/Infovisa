@@ -65,6 +65,7 @@ class TipoProcessoController extends Controller
         // Converte checkboxes para boolean (checkboxes não enviam valor quando desmarcados)
         $validated['anual'] = $request->has('anual');
         $validated['usuario_externo_pode_abrir'] = $request->has('usuario_externo_pode_abrir');
+        $validated['exclusivo_receituario'] = $request->has('exclusivo_receituario');
         $validated['exibir_aviso_abertura_empresa'] = $request->has('exibir_aviso_abertura_empresa');
         $validated['usuario_externo_pode_visualizar'] = $request->has('usuario_externo_pode_visualizar');
         $validated['exibir_fila_publica'] = $request->has('exibir_fila_publica');
@@ -173,6 +174,7 @@ class TipoProcessoController extends Controller
         // Converte checkboxes para boolean (checkboxes não enviam valor quando desmarcados)
         $validated['anual'] = $request->has('anual');
         $validated['usuario_externo_pode_abrir'] = $request->has('usuario_externo_pode_abrir');
+        $validated['exclusivo_receituario'] = $request->has('exclusivo_receituario');
         $validated['exibir_aviso_abertura_empresa'] = $request->has('exibir_aviso_abertura_empresa');
         $validated['usuario_externo_pode_visualizar'] = $request->has('usuario_externo_pode_visualizar');
         $validated['exibir_fila_publica'] = $request->has('exibir_fila_publica');

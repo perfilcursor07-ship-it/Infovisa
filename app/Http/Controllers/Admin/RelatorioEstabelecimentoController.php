@@ -177,6 +177,9 @@ class RelatorioEstabelecimentoController extends Controller
                 'processos' => fn ($q) => $q->with('tipoProcesso')->orderByDesc('created_at'),
             ]);
 
+        // Cadastro interno de receituário (profissional) não é estabelecimento fiscalizado
+        $query->where('oculto_receituario', false);
+
         // Cadastros rejeitados nunca entram no relatório (nem em "Todos os cadastros")
         $query->where(fn ($q) => $q->whereNull('status')->orWhere('status', '!=', 'rejeitado'));
 

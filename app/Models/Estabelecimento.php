@@ -53,6 +53,7 @@ class Estabelecimento extends Model
         'codigo_municipio_ibge',
         'tipo_pessoa',
         'produtor_rural',
+        'oculto_receituario',
         'is_unidade_movel',
         'tipo_unidade_movel',
         'respostas_unidade_movel',
@@ -118,6 +119,7 @@ class Estabelecimento extends Model
         'respostas_questionario2' => 'array',
         'is_unidade_movel' => 'boolean',
         'produtor_rural' => 'boolean',
+        'oculto_receituario' => 'boolean',
         'respostas_unidade_movel' => 'array',
         'tipo_setor' => TipoSetor::class,
         'aprovado_em' => 'datetime',
@@ -213,6 +215,14 @@ class Estabelecimento extends Model
     }
 
     /**
+     * Receituário dono do cadastro interno (oculto_receituario)
+     */
+    public function receituario()
+    {
+        return $this->hasOne(Receituario::class);
+    }
+
+    /**
      * Responsáveis legais ativos
      */
     public function responsaveisLegais()
@@ -273,6 +283,11 @@ class Estabelecimento extends Model
      */
     public function precisaCadastrarEquipamentosImagem(): bool
     {
+        // Cadastro interno de receituário (profissional pessoa física): sem equipamentos
+        if ($this->oculto_receituario) {
+            return false;
+        }
+
         // Se não exige equipamentos, não precisa cadastrar
         if (!AtividadeEquipamentoRadiacao::estabelecimentoExigeEquipamentos($this)) {
             return false;
@@ -296,6 +311,10 @@ class Estabelecimento extends Model
      */
     public function precisaCadastrarEquipamentosImagemParaProcesso(string $tipoProcessoCodigo): bool
     {
+        if ($this->oculto_receituario) {
+            return false;
+        }
+
         // Se não exige equipamentos para este tipo de processo, não precisa cadastrar
         if (!AtividadeEquipamentoRadiacao::estabelecimentoExigeEquipamentosParaProcesso($this, $tipoProcessoCodigo)) {
             return false;
@@ -319,6 +338,11 @@ class Estabelecimento extends Model
      */
     public function precisaCadastrarResponsavelLegal(): bool
     {
+        // O cadastro interno de receituário é o próprio profissional: não tem responsável legal
+        if ($this->oculto_receituario) {
+            return false;
+        }
+
         return $this->responsaveisLegais()->count() === 0;
     }
 
@@ -327,6 +351,10 @@ class Estabelecimento extends Model
      */
     public function precisaCadastrarResponsavelTecnicoPorAtividade(): bool
     {
+        if ($this->oculto_receituario) {
+            return false;
+        }
+
         if (!AtividadeResponsavelTecnico::estabelecimentoExigeResponsavelTecnico($this)) {
             return false;
         }

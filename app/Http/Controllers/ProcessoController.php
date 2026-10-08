@@ -835,7 +835,12 @@ class ProcessoController extends Controller
             ])
             ->where('estabelecimento_id', $estabelecimentoId)
             ->findOrFail($processoId);
-        
+
+        // Processo de receituário tem tela própria e simplificada (sem tramitação, OS ou documentos obrigatórios)
+        if ($processo->isProcessoReceituario()) {
+            return $this->showReceituario($estabelecimento, $processo);
+        }
+
         // Busca modelos de documentos ativos
         $modelosDocumento = ModeloDocumento::with('tipoDocumento')
             ->disponiveisParaUsuario(auth('interno')->user())
@@ -4477,6 +4482,38 @@ TXT;
     /**
      * Valida se o usuário tem permissão para acessar o processo
      */
+    /**
+     * Tela simplificada do processo de receituário: requisições de notificação/numeração,
+     * arquivos enviados (ofícios e documentos diversos) e histórico. Não tem tramitação nem OS.
+     */
+    private function showReceituario(Estabelecimento $estabelecimento, Processo $processo)
+    {
+        $receituario = $estabelecimento->receituario;
+
+        $requisicoes = $processo->requisicoesReceituario()
+            ->with(['usuarioExterno:id,nome', 'analisadoPor:id,nome'])
+            ->get();
+
+        $arquivos = $processo->documentos
+            ->where('tipo_documento', '!=', 'documento_digital')
+            ->values();
+
+        $documentosDigitais = \App\Models\DocumentoDigital::with(['tipoDocumento', 'usuarioCriador:id,nome'])
+            ->where('processo_id', $processo->id)
+            ->orderByDesc('created_at')
+            ->get();
+
+        $eventos = \App\Models\ProcessoEvento::with('usuario:id,nome')
+            ->where('processo_id', $processo->id)
+            ->orderByDesc('created_at')
+            ->limit(20)
+            ->get();
+
+        return view('estabelecimentos.processos.show-receituario', compact(
+            'estabelecimento', 'processo', 'receituario', 'requisicoes', 'arquivos', 'documentosDigitais', 'eventos'
+        ));
+    }
+
     private function validarPermissaoAcesso($estabelecimento, ?Processo $processo = null)
     {
         $usuario = auth('interno')->user();

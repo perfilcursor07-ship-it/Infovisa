@@ -219,7 +219,7 @@ function cnpjLookup() {
             }
             
             try {
-                const response = await fetch(`{{ route('admin.receituarios.buscar-cnpj') }}?cnpj=${cnpjLimpo}`);
+                const response = await fetch(`{{ $rotaBuscarCnpj ?? route('admin.receituarios.buscar-cnpj') }}?cnpj=${cnpjLimpo}`);
                 const data = await response.json();
                 
                 if (data.error) {

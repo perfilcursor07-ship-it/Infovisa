@@ -4,7 +4,7 @@
     <div class="flex min-h-full items-center justify-center p-4">
         <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden" @click.stop
              x-data="{ 
-                 abaAtiva: 'obrigatorios',
+                 abaAtiva: '{{ ($somenteDiversos ?? false) ? 'diversos' : 'obrigatorios' }}',
                  arquivosObrigatorios: {},
                  documentosEnviados: {},
                  enviando: {},
@@ -356,6 +356,7 @@
             {{-- Abas --}}
             <div class="border-b border-gray-200 bg-gray-50">
                 <nav class="flex px-6" aria-label="Tabs">
+                    @unless($somenteDiversos ?? false)
                     <button type="button" @click="abaAtiva = 'obrigatorios'"
                             :class="abaAtiva === 'obrigatorios' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
                             class="px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2">
@@ -367,6 +368,7 @@
                         <span class="px-1.5 py-0.5 text-[10px] font-bold bg-blue-100 text-blue-700 rounded-full">{{ $documentosObrigatorios->count() }}</span>
                         @endif
                     </button>
+                    @endunless
                     <button type="button" @click="abaAtiva = 'diversos'"
                             :class="abaAtiva === 'diversos' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
                             class="px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2">
@@ -382,6 +384,7 @@
             <div class="overflow-y-auto" style="max-height: calc(90vh - 180px);">
                 
                 {{-- Aba: Documentos Obrigatórios --}}
+                @unless($somenteDiversos ?? false)
                 <div x-show="abaAtiva === 'obrigatorios'" class="p-6">
                     {{-- Aviso --}}
                     <div class="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-xl mb-4">
@@ -799,7 +802,8 @@
                     </div>
                     @endif
                 </div>
-                
+                @endunless
+
                 {{-- Aba: Documentos Diversos --}}
                 <div x-show="abaAtiva === 'diversos'" class="p-6"
                      x-data="{
