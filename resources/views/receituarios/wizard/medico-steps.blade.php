@@ -255,11 +255,10 @@
                             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
                             Enviar outra carteira
                         </label>
-                        <button type="button" x-show="typeof solicitante !== 'undefined' && solicitante === 'proprio'"
-                                @click="escolher('terceiro'); $nextTick(() => usarDadosDaCarteira())"
-                                class="inline-flex min-h-11 items-center justify-center rounded-lg bg-red-600 px-3 py-2 text-center text-sm font-semibold text-white hover:bg-red-700">
-                            Cadastrar para o profissional identificado na carteira
-                        </button>
+                        <p x-show="typeof solicitante !== 'undefined' && solicitante === 'proprio'"
+                           class="sm:col-span-1 flex items-center rounded-lg bg-red-50 px-3 py-2 text-xs text-red-800">
+                            O cadastro é só do próprio profissional: envie a carteira que está no seu nome e CPF.
+                        </p>
                         <button type="button" x-show="typeof solicitante === 'undefined' || solicitante !== 'proprio'"
                                 @click="usarDadosDaCarteira(true)"
                                 class="inline-flex min-h-11 items-center justify-center rounded-lg bg-red-600 px-3 py-2 text-center text-sm font-semibold text-white hover:bg-red-700">
@@ -279,8 +278,7 @@
                 </p>
                 <div class="mt-2 flex flex-wrap gap-2">
                     <label for="carteira_frente" class="px-2.5 py-1 text-xs font-semibold bg-white border border-amber-300 rounded-lg hover:bg-amber-100 cursor-pointer">Enviar outra carteira</label>
-                    <button type="button" x-show="typeof solicitante !== 'undefined' && solicitante === 'proprio'" @click="escolher('terceiro'); $nextTick(() => usarDadosDaCarteira())"
-                            class="px-2.5 py-1 text-xs font-semibold text-white bg-amber-600 rounded-lg hover:bg-amber-700">Cadastrar para o profissional identificado na carteira</button>
+                    <span x-show="typeof solicitante !== 'undefined' && solicitante === 'proprio'" class="self-center text-xs">A carteira deve estar no seu nome.</span>
                     <button type="button" x-show="typeof solicitante === 'undefined' || solicitante !== 'proprio'" @click="usarNomeDaCarteira()"
                             class="px-2.5 py-1 text-xs font-semibold text-white bg-amber-600 rounded-lg hover:bg-amber-700">Usar o nome da carteira</button>
                 </div>
@@ -1187,6 +1185,10 @@ function carteiraConselho(config) {
             if (!this.liberado) return 'Envie a carteira do conselho ou escolha preencher manualmente.';
             if (this.cpfStatus === 'diferente') {
                 return `O CPF da carteira (${this.formatarCpf(this.cpfCarteira)}) é diferente do CPF do profissional (${this.formatarCpf(this.cpfFormulario)}). Envie a carteira do profissional certo.`;
+            }
+            // Cadastro do próprio profissional (área da empresa): a carteira tem que estar no nome dele
+            if (this.campo('solicitante')?.value === 'proprio' && this.nomeDivergente && this.cpfStatus !== 'igual') {
+                return `A carteira está no nome de ${this.nomeCarteira}, e não no seu (${this.nomeFormulario}). Envie a sua carteira do conselho.`;
             }
             return '';
         },

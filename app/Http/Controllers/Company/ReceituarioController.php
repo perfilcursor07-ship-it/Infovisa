@@ -77,6 +77,14 @@ class ReceituarioController extends Controller
         $municipios = Municipio::orderBy('nome')->get(['id', 'nome', 'codigo_ibge']);
         $usuario = auth('externo')->user();
 
+        // O cadastro é do próprio profissional: nome e CPF vêm da conta dele
+        if (strlen(preg_replace('/\D/', '', (string) $usuario->cpf)) !== 11) {
+            return redirect()->route('company.receituarios.index')->with(
+                'error',
+                'Para cadastrar o receituário, a sua conta precisa ter o CPF informado. Atualize em "Meu Perfil".'
+            );
+        }
+
         return view('company.receituarios.create', compact('tipo', 'municipios', 'usuario'));
     }
 
@@ -91,8 +99,15 @@ class ReceituarioController extends Controller
             );
         }
 
+        // Só o próprio profissional faz o cadastro, com a conta dele (nome e CPF da conta)
+        $request->merge(['solicitante' => 'proprio']);
+        if (strlen(preg_replace('/\D/', '', (string) $usuario->cpf)) !== 11) {
+            return redirect()->route('company.receituarios.index')
+                ->with('error', 'Para cadastrar o receituário, a sua conta precisa ter o CPF informado. Atualize em "Meu Perfil".');
+        }
+
         // Profissional já cadastrado (por outra pessoa ou pela Vigilância): não cria um segundo cadastro
-        $cpfInformado = preg_replace('/\D/', '', (string) ($request->input('solicitante') === 'proprio' ? $usuario->cpf : $request->input('cpf')));
+        $cpfInformado = preg_replace('/\D/', '', (string) $usuario->cpf);
         if (strlen($cpfInformado) === 11 && ($existente = $this->cadastroExistente($cpfInformado))) {
             return back()->withInput($request->except(['carteira_conselho', 'carteira_conselho_verso', 'comprovante_endereco']))
                 ->withErrors(['cpf' => $this->mensagemCadastroExistente($existente)]);
@@ -103,7 +118,7 @@ class ReceituarioController extends Controller
         ];
 
         if ($request->tipo === 'medico') {
-            // "proprio" = o próprio usuário logado é o profissional; "terceiro" = em nome de outro profissional
+            // Sempre "proprio": o usuário logado é o profissional (forçado acima)
             $rules['solicitante'] = 'required|in:proprio,terceiro';
         }
 
@@ -172,7 +187,7 @@ class ReceituarioController extends Controller
             'comprovante_endereco.max' => 'O comprovante de endereço deve ter no máximo 10 MB.',
         ]);
 
-        $this->validarCarteira($request, ($validated['solicitante'] ?? null) === 'proprio' ? $usuario->cpf : ($validated['cpf'] ?? ''));
+        $this->validarCarteira($request, $usuario->cpf, $usuario->nome);
 
         $solicitante = $validated['solicitante'] ?? null;
         $declaracaoEndereco = $this->declaracaoEndereco(
@@ -386,7 +401,7 @@ class ReceituarioController extends Controller
     /**
      * Carteira do conselho: frente e verso enviados e CPF lido igual ao do profissional
      */
-    private function validarCarteira(Request $request, ?string $cpfProfissional): void
+    private function validarCarteira(Request $request, ?string $cpfProfissional, ?string $nomeProfissional = null): void
     {
         // Frente e verso: o verso pode vir em arquivo separado, como 2ª página do mesmo PDF ou na mesma
         // foto/página da frente (cédula antiga aberta — marcado como "frente e verso no mesmo arquivo")
@@ -404,6 +419,15 @@ class ReceituarioController extends Controller
         if (is_array($lido) && !empty($lido['cpf_valido']) && $cpf && preg_replace('/\D/', '', (string) ($lido['cpf'] ?? '')) !== $cpf) {
             throw \Illuminate\Validation\ValidationException::withMessages([
                 'carteira_conselho' => 'O CPF da carteira do conselho é diferente do CPF do profissional. Envie a carteira do profissional certo.',
+            ]);
+        }
+
+        // Sem CPF confirmado na carteira, o nome lido tem que ser o do profissional
+        $cpfConfere = is_array($lido) && !empty($lido['cpf_valido']) && $cpf && preg_replace('/\D/', '', (string) ($lido['cpf'] ?? '')) === $cpf;
+        if ($nomeProfissional && is_array($lido) && !empty($lido['nome']) && !$cpfConfere
+            && !app(\App\Services\LeitorCarteiraConselhoService::class)->nomesParecidos($lido['nome'], $nomeProfissional)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'carteira_conselho' => 'A carteira do conselho está no nome de ' . $lido['nome'] . '. O cadastro é do próprio profissional: envie a carteira que está no seu nome.',
             ]);
         }
     }

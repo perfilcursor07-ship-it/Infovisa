@@ -47,51 +47,19 @@
         <input type="hidden" name="tipo" value="{{ $tipo }}">
 
         @if($tipo === 'medico')
-        {{-- Para quem é o receituário? --}}
-        <input type="hidden" name="solicitante" :value="solicitante">
+        {{-- O cadastro é sempre do próprio profissional, feito com a conta dele --}}
+        <input type="hidden" name="solicitante" value="proprio">
 
-        {{-- Já escolhido: só uma linha no topo --}}
-        <div x-show="solicitante && !alterandoSolicitante" x-cloak
-             class="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border px-4 py-2.5 text-sm"
-             :class="solicitante === 'proprio' ? 'bg-blue-50 border-blue-200 text-blue-900' : 'bg-violet-50 border-violet-200 text-violet-900'">
-            <span x-text="solicitante === 'proprio' ? '👨‍⚕️' : '🧑‍💼'"></span>
-            <span x-show="solicitante === 'proprio'">Receituário <strong>para você</strong>: {{ mb_strtoupper($usuario->nome, 'UTF-8') }} · CPF {{ $usuario->cpf_formatado }}</span>
-            <span x-show="solicitante === 'terceiro'">Receituário <strong>em nome de outro profissional</strong> — preencha os dados dele abaixo.</span>
-            <button type="button" @click="alterandoSolicitante = true" class="ml-auto text-xs font-semibold underline opacity-80 hover:opacity-100">Alterar</button>
-        </div>
-
-        {{-- Ainda não escolhido (ou alterando) --}}
-        <div x-show="!solicitante || alterandoSolicitante" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-            <div class="flex items-center justify-between gap-2 mb-3">
-                <div>
-                    <h2 class="text-sm font-bold text-slate-900">Para quem é o receituário?</h2>
-                    <p class="text-xs text-slate-500">Você é o profissional ou está pedindo para outra pessoa?</p>
-                </div>
-                <button type="button" x-show="solicitante" @click="alterandoSolicitante = false" class="text-xs font-semibold text-slate-500 hover:text-slate-700">Cancelar</button>
+        <div class="flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+            <span class="text-lg leading-none">👨‍⚕️</span>
+            <div>
+                <p>Cadastro do profissional <strong>{{ mb_strtoupper($usuario->nome, 'UTF-8') }}</strong> · CPF {{ $usuario->cpf_formatado }}</p>
+                <p class="mt-0.5 text-xs text-blue-800">
+                    O cadastro de receituário é feito pelo <strong>próprio profissional</strong>, com a conta dele no InfoVISA.
+                    A carteira do conselho enviada no passo 1 deve estar no <strong>seu nome e CPF</strong>.
+                    Se você é secretária ou funcionária, peça ao profissional para criar a conta dele e, depois, ele pode te dar acesso em "Usuários vinculados".
+                </p>
             </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                <button type="button" @click="escolher('proprio')"
-                        class="text-left rounded-xl border-2 px-3 py-2.5 transition flex items-center gap-3"
-                        :class="solicitante === 'proprio' ? 'border-blue-600 bg-blue-50' : 'border-slate-200 hover:border-blue-300 hover:bg-slate-50'">
-                    <span class="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">👨‍⚕️</span>
-                    <span class="min-w-0">
-                        <span class="block text-sm font-semibold text-slate-900">Sou o profissional</span>
-                        <span class="block text-xs text-slate-500 truncate">Usar meus dados: {{ mb_strtoupper($usuario->nome, 'UTF-8') }}</span>
-                    </span>
-                </button>
-
-                <button type="button" @click="escolher('terceiro')"
-                        class="text-left rounded-xl border-2 px-3 py-2.5 transition flex items-center gap-3"
-                        :class="solicitante === 'terceiro' ? 'border-violet-600 bg-violet-50' : 'border-slate-200 hover:border-violet-300 hover:bg-slate-50'">
-                    <span class="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center flex-shrink-0">🧑‍💼</span>
-                    <span class="min-w-0">
-                        <span class="block text-sm font-semibold text-slate-900">Em nome de outro profissional</span>
-                        <span class="block text-xs text-slate-500">Sou secretária, funcionária ou estou ajudando o profissional</span>
-                    </span>
-                </button>
-            </div>
-            <p x-show="avisoEscolha" x-cloak class="mt-2 text-xs font-medium text-red-600">Escolha uma das opções acima para continuar.</p>
         </div>
         @endif
 
@@ -197,7 +165,7 @@ function wizardReceituario() {
     return {
         currentStep: 0,
         steps: passos[tipo].map(title => ({ title })),
-        solicitante: @js(old('solicitante', '')),
+        solicitante: 'proprio', // cadastro sempre do próprio profissional
         alterandoSolicitante: false,
         avisoEscolha: false,
         // Estado enviado pela carteira do conselho (passo 0) e pelo comprovante de endereço (passo 1)
@@ -232,7 +200,7 @@ function wizardReceituario() {
         },
 
         init() {
-            if (this.solicitante) this.$nextTick(() => this.aplicarSolicitante());
+            if (tipo === 'medico') this.$nextTick(() => { this.aplicarSolicitante(); this.verificarCpf(); });
         },
 
         podeVerPassos() {

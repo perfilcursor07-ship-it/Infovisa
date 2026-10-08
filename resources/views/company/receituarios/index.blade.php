@@ -9,7 +9,7 @@
         'medico' => [
             'titulo' => 'Médico, Dentista ou Veterinário',
             'curto' => 'Médico/Dentista/Vet.',
-            'texto' => 'Para você ou em nome de outro profissional',
+            'texto' => 'Feito pelo próprio profissional, com a conta dele',
             'icone' => 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z',
             'chip' => 'bg-blue-50 text-blue-600',
             'hover' => 'hover:border-blue-300 hover:shadow-blue-100',
