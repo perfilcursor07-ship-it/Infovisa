@@ -142,8 +142,17 @@
                                     </span>
                                 @endif
 
+                                {{-- Carteira não identificada na leitura: a empresa declarou ciência do risco de rejeição --}}
+                                @if($doc === 'carteira' && !empty($leituraCarteira['ciente_ilegivel']))
+                                    <span class="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-50 text-amber-800 text-[10px] rounded font-bold"
+                                          title="A carteira não foi identificada na leitura automática. A empresa marcou que está ciente de que o documento pode estar ilegível e de que o cadastro poderá ser rejeitado{{ !empty($leituraCarteira['ciente_ilegivel_em']) ? ' (' . \Carbon\Carbon::parse($leituraCarteira['ciente_ilegivel_em'])->format('d/m/Y H:i') . ')' : '' }}.">
+                                        <i class="fas fa-exclamation-triangle" style="font-size: 9px;"></i>
+                                        Documento não identificado · empresa ciente
+                                    </span>
+                                @endif
+
                                 {{-- O que foi lido automaticamente, para ajudar na conferência --}}
-                                @if($doc === 'carteira' && !empty($leituraCarteira))
+                                @if($doc === 'carteira' && !empty($leituraCarteira) && (!empty($leituraCarteira['numero']) || !empty($leituraCarteira['cpf'])))
                                     @php $cpfConfere = !empty($leituraCarteira['cpf']) && preg_replace('/\D/', '', $leituraCarteira['cpf']) === preg_replace('/\D/', '', (string) $receituario->cpf); @endphp
                                     <span class="inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-50 text-indigo-700 text-[10px] rounded font-bold" title="Lido automaticamente{{ ($leituraCarteira['origem'] ?? '') === 'ia' ? ' (IA)' : '' }}">
                                         <i class="far fa-id-card" style="font-size: 10px;"></i>

@@ -441,15 +441,21 @@ class ReceituarioController extends Controller
         $frente = $request->file('carteira_conselho');
         $verso = $request->file('carteira_conselho_verso');
         $leitura = json_decode((string) $request->input('carteira_leitura'), true);
+        $leitura = is_array($leitura)
+            ? array_intersect_key($leitura, array_flip(['conselho', 'uf', 'numero', 'especialidade', 'nome', 'cpf', 'cpf_valido', 'origem']))
+            : null;
+
+        // Carteira não identificada: a empresa declarou estar ciente de que o cadastro pode ser rejeitado
+        if ($request->boolean('carteira_ilegivel_ciente')) {
+            $leitura = ($leitura ?? []) + ['ciente_ilegivel' => true, 'ciente_ilegivel_em' => now()->toIso8601String()];
+        }
 
         return [
             'carteira_conselho_path' => $frente->store($pasta, 'local'),
             'carteira_conselho_nome' => mb_substr($frente->getClientOriginalName(), 0, 255),
             'carteira_conselho_verso_path' => $verso?->store($pasta, 'local'),
             'carteira_conselho_verso_nome' => $verso ? mb_substr($verso->getClientOriginalName(), 0, 255) : null,
-            'carteira_conselho_leitura' => is_array($leitura)
-                ? array_intersect_key($leitura, array_flip(['conselho', 'uf', 'numero', 'especialidade', 'nome', 'cpf', 'cpf_valido', 'origem']))
-                : null,
+            'carteira_conselho_leitura' => $leitura ?: null,
         ];
     }
 
