@@ -168,6 +168,11 @@ class ReceituarioController extends Controller
             $rules['declaracao_endereco_aceite'] = 'nullable|in:1';
         }
 
+        // Passo 4: ficha cadastral assinada (gov.br ou à mão, com carimbo)
+        if ($request->tipo === 'medico') {
+            $rules['documento_assinado'] = 'required|file|mimes:pdf,jpg,jpeg,png,webp|max:10240';
+        }
+
         $validated = $request->validate($rules, [
             'solicitante.required' => 'Informe se o receituário é para você ou para outro profissional.',
             'nome.required' => 'Informe o nome do profissional.',
@@ -185,6 +190,9 @@ class ReceituarioController extends Controller
             'comprovante_endereco.required' => 'Envie o comprovante de endereço (conta de água, energia ou telefone fixo).',
             'comprovante_endereco.mimes' => 'O comprovante de endereço deve ser PDF ou imagem (JPG, PNG ou WEBP).',
             'comprovante_endereco.max' => 'O comprovante de endereço deve ter no máximo 10 MB.',
+            'documento_assinado.required' => 'Envie a ficha cadastral assinada (Passo 4).',
+            'documento_assinado.mimes' => 'A ficha assinada deve ser PDF ou imagem (JPG, PNG ou WEBP).',
+            'documento_assinado.max' => 'A ficha assinada deve ter no máximo 10 MB.',
         ]);
 
         $this->validarCarteira($request, $usuario->cpf, $usuario->nome);
@@ -197,7 +205,8 @@ class ReceituarioController extends Controller
         unset(
             $validated['solicitante'], $validated['carteira_conselho'], $validated['carteira_conselho_verso'], $validated['carteira_leitura'],
             $validated['comprovante_endereco'], $validated['comprovante_leitura'], $validated['comprovante_titular'],
-            $validated['comprovante_titular_nome'], $validated['declaracao_endereco_vinculo'], $validated['declaracao_endereco_aceite']
+            $validated['comprovante_titular_nome'], $validated['declaracao_endereco_vinculo'], $validated['declaracao_endereco_aceite'],
+            $validated['documento_assinado']
         );
 
         // Arquivos da carteira e do comprovante (disco privado) + o que foi lido deles, para conferência da vigilância
@@ -206,6 +215,9 @@ class ReceituarioController extends Controller
         }
         if ($request->hasFile('comprovante_endereco')) {
             $validated = array_merge($validated, $this->arquivosComprovante($request, $declaracaoEndereco));
+        }
+        if ($request->hasFile('documento_assinado')) {
+            $validated = array_merge($validated, $this->arquivoAssinado($request->file('documento_assinado')));
         }
 
         // Usando o próprio cadastro: nome e CPF vêm sempre do usuário logado (não do formulário)
@@ -466,14 +478,94 @@ class ReceituarioController extends Controller
     {
         $arquivo = $request->file('comprovante_endereco');
         $lido = json_decode((string) $request->input('comprovante_leitura'), true);
+        $lido = is_array($lido)
+            ? array_intersect_key($lido, array_flip(['titular', 'cep', 'endereco', 'municipio', 'uf', 'tipo', 'origem']))
+            : null;
+
+        // Comprovante não identificado: a empresa declarou estar ciente de que o cadastro pode ser rejeitado
+        if ($request->boolean('comprovante_ilegivel_ciente')) {
+            $lido = ($lido ?? []) + ['ciente_ilegivel' => true, 'ciente_ilegivel_em' => now()->toIso8601String()];
+        }
 
         return [
             'comprovante_endereco_path' => $arquivo->store('receituarios/comprovantes/' . now()->format('Y/m'), 'local'),
             'comprovante_endereco_nome' => mb_substr($arquivo->getClientOriginalName(), 0, 255),
-            'comprovante_endereco_leitura' => is_array($lido)
-                ? array_intersect_key($lido, array_flip(['titular', 'cep', 'endereco', 'municipio', 'uf', 'tipo', 'origem']))
-                : null,
+            'comprovante_endereco_leitura' => $lido ?: null,
             'declaracao_endereco' => $declaracao,
+        ];
+    }
+
+    /**
+     * Passo 4: ficha cadastral em PDF com os dados preenchidos nos passos 1 a 3 (ainda não salvos),
+     * para o profissional assinar (gov.br ou à mão, com carimbo) e anexar.
+     */
+    public function fichaPrevia(Request $request)
+    {
+        $usuario = auth('externo')->user();
+        $dados = $request->validate([
+            'especialidade' => 'nullable|string|max:255',
+            'telefone' => 'nullable|string|max:20',
+            'telefone2' => 'nullable|string|max:20',
+            'email' => 'nullable|string|max:255',
+            'numero_conselho_classe' => 'nullable|string|max:50',
+            'endereco' => 'nullable|string|max:255',
+            'cep' => 'nullable|string|max:10',
+            'municipio_id' => 'nullable|integer',
+            'locais_trabalho' => 'nullable|array',
+        ]);
+
+        $receituario = new Receituario([
+            'tipo' => 'medico',
+            'nome' => mb_strtoupper((string) $usuario->nome, 'UTF-8'),
+            'cpf' => $usuario->cpf_formatado ?? $usuario->cpf,
+            'especialidade' => $dados['especialidade'] ?? null,
+            'telefone' => $dados['telefone'] ?? null,
+            'telefone2' => $dados['telefone2'] ?? null,
+            'email' => $dados['email'] ?? null,
+            'numero_conselho_classe' => $dados['numero_conselho_classe'] ?? null,
+            'endereco' => $dados['endereco'] ?? null,
+            'cep' => $dados['cep'] ?? null,
+            'locais_trabalho' => array_values(array_filter((array) ($dados['locais_trabalho'] ?? []), fn ($l) => !empty($l['nome']))),
+        ]);
+        $receituario->setRelation('municipio', !empty($dados['municipio_id']) ? Municipio::find($dados['municipio_id']) : null);
+
+        return Pdf::loadView('receituarios.pdf.medico', ['receituario' => $receituario])
+            ->setPaper('a4', 'portrait')
+            ->stream('ficha-cadastral-receituario.pdf');
+    }
+
+    /**
+     * Ficha assinada rejeitada pela Vigilância: a empresa envia uma nova
+     */
+    public function reenviarAssinado(Request $request, $id)
+    {
+        $receituario = $this->doUsuario($id);
+        if ($receituario->statusDocumento('assinado') !== 'rejeitado') {
+            return back()->with('error', 'A ficha assinada não está aguardando correção.');
+        }
+
+        $request->validate([
+            'documento_assinado' => 'required|file|mimes:pdf,jpg,jpeg,png,webp|max:10240',
+        ], [
+            'documento_assinado.required' => 'Selecione a nova ficha assinada.',
+            'documento_assinado.mimes' => 'A ficha assinada deve ser PDF ou imagem (JPG, PNG ou WEBP).',
+            'documento_assinado.max' => 'A ficha assinada deve ter no máximo 10 MB.',
+        ]);
+
+        $anterior = $receituario->documento_assinado_path;
+        $receituario->fill($this->arquivoAssinado($request->file('documento_assinado')));
+        $receituario->documentoReenviado('assinado', $anterior); // salva e volta a ficha para análise
+
+        return redirect()->route('company.receituarios.show', ['id' => $receituario->id, 'aba' => 'documentos'])
+            ->with('success', 'Ficha assinada reenviada. A Vigilância Sanitária vai analisar novamente.');
+    }
+
+    private function arquivoAssinado(\Illuminate\Http\UploadedFile $arquivo): array
+    {
+        return [
+            'documento_assinado_path' => $arquivo->store('receituarios/assinados/' . now()->format('Y/m'), 'local'),
+            'documento_assinado_nome' => mb_substr($arquivo->getClientOriginalName(), 0, 255),
+            'documento_assinado_enviado_em' => now(),
         ];
     }
 

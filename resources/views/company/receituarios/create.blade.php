@@ -97,6 +97,9 @@
             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
                 @if(in_array($tipo, ['medico', 'talidomida']))
                     @include('receituarios.wizard.medico-steps')
+                    @if($tipo === 'medico')
+                        @include('company.receituarios.partials.passo-ficha-assinada')
+                    @endif
                 @elseif($tipo === 'instituicao')
                     @include('receituarios.wizard.instituicao-steps')
                 @elseif($tipo === 'secretaria')
@@ -156,7 +159,7 @@ function wizardReceituario() {
         'email' => $usuario->email,
     ]);
     const passos = {
-        medico: ['Dados Pessoais', 'Endereço', 'Locais de Trabalho'],
+        medico: ['Dados Pessoais', 'Endereço', 'Locais de Trabalho', 'Ficha assinada'],
         talidomida: ['Dados Pessoais', 'Endereço', 'Locais de Trabalho'],
         instituicao: ['Dados da Instituição', 'Endereço e Contato', 'Responsável Técnico'],
         secretaria: ['Dados da Secretaria', 'Endereço e Contato', 'Responsável'],

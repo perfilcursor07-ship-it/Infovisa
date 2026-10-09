@@ -575,27 +575,52 @@
             </div>
 
 
-            {{-- Não deu para ler / pouca nitidez: orienta a enviar um arquivo melhor --}}
-            <div x-show="(erro || poucaNitidez) && !lendo" x-cloak class="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
-                <div class="flex items-start gap-3">
-                    <span class="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0 text-base">📷</span>
+            {{-- Comprovante não identificado / pouca nitidez: enviar arquivo melhor ou declarar ciência --}}
+            <div x-show="precisaCiencia" x-cloak class="mt-3 rounded-xl border overflow-hidden"
+                 :class="cienteIlegivel ? 'border-amber-200' : 'border-red-200'" x-data="{ verDicas: false }">
+                <div class="flex items-start gap-3 px-4 py-3" :class="cienteIlegivel ? 'bg-amber-50' : 'bg-red-50'">
+                    <span class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                          :class="cienteIlegivel ? 'bg-amber-100 text-amber-600' : 'bg-red-100 text-red-600'">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v4m0 4h.01M10.29 3.86l-8.1 14.02A2 2 0 003.92 21h16.16a2 2 0 001.73-3.12l-8.1-14.02a2 2 0 00-3.46 0z"/></svg>
+                    </span>
                     <div class="flex-1 min-w-0">
-                        <p class="text-sm font-bold" x-text="erro ? (erro.startsWith('Muitas') || erro.startsWith('Não foi possível') ? erro : 'Não conseguimos ler este comprovante') : 'A imagem está com pouca nitidez'"></p>
-                        <p class="mt-0.5 text-xs">Para a solicitação <strong>não ser negada</strong> pela Vigilância Sanitária, o documento precisa estar legível. Se puder, envie um arquivo melhor:</p>
-                        <ul class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                            <li>✓ Use scanner de mesa ou um app de digitalização (ex.: Google Drive → Digitalizar)</li>
-                            <li>✓ Boa luz, sem reflexo, sombra ou flash estourado</li>
-                            <li>✓ Documento inteiro, reto e na posição de leitura</li>
-                            <li>✓ Nome do titular, endereço e CEP legíveis</li>
-                        </ul>
-                        <div class="mt-3 flex flex-wrap items-center gap-2">
-                            <label for="comprovante_endereco" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg cursor-pointer">
-                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-                                Enviar arquivo mais nítido
-                            </label>
-                            <span class="text-[11px] text-amber-800">Não tem outro agora? Confira o endereço abaixo — o arquivo continua anexado.</span>
-                        </div>
+                        <p class="text-sm font-bold" :class="cienteIlegivel ? 'text-amber-900' : 'text-red-900'"
+                           x-text="erro && erro.startsWith('Muitas') ? erro : (poucaNitidez ? 'Comprovante com baixa nitidez' : 'Comprovante não identificado')"></p>
+                        <p class="mt-0.5 text-xs" :class="cienteIlegivel ? 'text-amber-800' : 'text-red-800'">
+                            Não conseguimos identificar os dados do comprovante de endereço (<strong>nome do titular, endereço e CEP</strong>).
+                            Um documento <strong>ilegível pode levar à rejeição do cadastro</strong> pela Vigilância Sanitária.
+                        </p>
                     </div>
+                </div>
+
+                <div class="bg-white px-4 py-3 space-y-3">
+                    {{-- Opção 1: arquivo melhor --}}
+                    <div class="flex flex-wrap items-center gap-2">
+                        <label for="comprovante_endereco" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg cursor-pointer">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                            Enviar arquivo mais nítido
+                        </label>
+                        <button type="button" @click="verDicas = !verDicas" class="text-xs font-semibold text-blue-700 hover:underline"
+                                x-text="verDicas ? 'Ocultar dicas' : 'Como tirar uma boa foto?'"></button>
+                    </div>
+                    <ul x-show="verDicas" x-cloak class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-600">
+                        <li>✓ Use scanner de mesa ou app de digitalização (ex.: Google Drive → Digitalizar)</li>
+                        <li>✓ Boa luz, sem reflexo, sombra ou flash estourado</li>
+                        <li>✓ Documento inteiro, reto e na posição de leitura</li>
+                        <li>✓ Nome do titular, endereço e CEP legíveis</li>
+                    </ul>
+
+                    {{-- Opção 2: seguir assim, declarando ciência --}}
+                    <label class="flex items-start gap-2.5 rounded-lg border px-3 py-2.5 cursor-pointer transition"
+                           :class="cienteIlegivel ? 'border-amber-300 bg-amber-50' : 'border-slate-200 hover:bg-slate-50'">
+                        <input type="checkbox" x-model="cienteIlegivel" class="mt-0.5 h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 flex-shrink-0">
+                        <span class="text-xs text-slate-700 leading-relaxed">
+                            <strong class="text-slate-900">Não tenho um arquivo melhor agora.</strong>
+                            Estou ciente de que o comprovante enviado <strong>não foi identificado e pode estar ilegível</strong>, e que, por isso,
+                            o cadastro <strong>poderá ser rejeitado</strong> pela Vigilância Sanitária. Vou conferir e preencher o endereço manualmente.
+                        </span>
+                    </label>
+                    <input type="hidden" name="comprovante_ilegivel_ciente" :value="precisaCiencia && cienteIlegivel ? 1 : 0">
                 </div>
             </div>
 
@@ -1401,6 +1426,7 @@ function comprovanteEndereco(config) {
         vinculo: @js(old('declaracao_endereco_vinculo', '')),
         aceite: false,
         declaracaoPopupAberto: false,
+        cienteIlegivel: false,
 
         init() {
             // Nome do profissional vem do Passo 1
@@ -1431,6 +1457,10 @@ function comprovanteEndereco(config) {
         get poucaNitidez() {
             return this.lido && !this.lendo && !this.dadosEssenciaisLidos && qualidadeBaixa(this.qualidade);
         },
+        // Comprovante não lido (ou ilegível): exige arquivo melhor ou a ciência do usuário
+        get precisaCiencia() {
+            return !!(this.erro || this.poucaNitidez) && this.lido && !this.lendo && !!this.arquivo;
+        },
         // confere | diferente | desconhecido (sem titular lido) | null (sem leitura)
         get situacao() {
             if (!this.lido) return null;
@@ -1459,6 +1489,9 @@ function comprovanteEndereco(config) {
             if (config.obrigatorio && !this.arquivo) return 'Envie o comprovante de endereço (conta de água, energia ou telefone fixo).';
             if (!this.arquivo) return '';
             if (!this.lido) return 'Aguarde terminar a leitura do comprovante de endereço.';
+            if (this.precisaCiencia && !this.cienteIlegivel) {
+                return 'O comprovante não foi identificado: envie um arquivo mais nítido ou marque que está ciente de que o cadastro poderá ser rejeitado.';
+            }
             if (this.situacao === 'desconhecido' && !this.situacaoTitular) return 'Informe se o comprovante de endereço está no nome do profissional.';
             if (this.precisaDeclaracao) {
                 if (!this.titularDeclarado) return 'Informe o nome de quem está no comprovante de endereço.';
@@ -1495,6 +1528,7 @@ function comprovanteEndereco(config) {
             this.titularInformado = '';
             this.vinculo = '';
             this.declaracaoPopupAberto = false;
+            this.cienteIlegivel = false;
 
             // Prévia em paralelo: a leitura não espera por ela
             if (file.type.startsWith('image/')) {
@@ -1517,6 +1551,7 @@ function comprovanteEndereco(config) {
                 await new Promise(r => setTimeout(r, 250));
                 this.etapa = 1;
                 this.qualidade = {};
+                this.cienteIlegivel = false;
                 const texto = await lerTextoDoArquivo(this.arquivo, (p) => { this.progresso = p; }, 2, this.qualidade);
                 this.etapa = 2;
                 const resposta = await postarLeitura(config.url, texto);

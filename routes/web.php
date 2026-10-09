@@ -114,6 +114,8 @@ Route::middleware(['auth:externo', 'no-cache-auth'])->prefix('company')->name('c
         Route::get('{id}/corrigir/{documento}', [\App\Http\Controllers\Company\ReceituarioController::class, 'corrigir'])->whereNumber('id')->whereIn('documento', ['carteira', 'comprovante'])->name('corrigir');
         Route::post('{id}/corrigir/{documento}', [\App\Http\Controllers\Company\ReceituarioController::class, 'salvarCorrecao'])->whereNumber('id')->whereIn('documento', ['carteira', 'comprovante'])->name('salvar-correcao');
         Route::get('{id}/documento-assinado', [\App\Http\Controllers\Company\ReceituarioController::class, 'documentoAssinado'])->whereNumber('id')->name('documento-assinado');
+        Route::post('{id}/documento-assinado', [\App\Http\Controllers\Company\ReceituarioController::class, 'reenviarAssinado'])->whereNumber('id')->name('reenviar-assinado');
+        Route::post('ficha-previa', [\App\Http\Controllers\Company\ReceituarioController::class, 'fichaPrevia'])->middleware('throttle:30,1')->name('ficha-previa');
         Route::post('{id}/processos', [\App\Http\Controllers\Company\ReceituarioController::class, 'abrirProcesso'])->whereNumber('id')->name('abrir-processo');
         Route::get('{id}', [\App\Http\Controllers\Company\ReceituarioController::class, 'show'])->whereNumber('id')->name('show');
     });
@@ -638,7 +640,7 @@ Route::middleware(['auth:interno', 'no-cache-auth'])->prefix('admin')->name('adm
         Route::get('{id}/usuarios/buscar', [\App\Http\Controllers\ReceituarioController::class, 'usuariosBuscar'])->whereNumber('id')->name('usuarios.buscar');
         Route::post('{id}/usuarios', [\App\Http\Controllers\ReceituarioController::class, 'usuariosStore'])->whereNumber('id')->name('usuarios.store');
         Route::delete('{id}/usuarios/{usuario}', [\App\Http\Controllers\ReceituarioController::class, 'usuariosDestroy'])->whereNumber('id')->whereNumber('usuario')->name('usuarios.destroy');
-        Route::post('{id}/documentos/{documento}/analisar', [\App\Http\Controllers\ReceituarioController::class, 'analisarDocumento'])->whereIn('documento', ['carteira', 'comprovante'])->name('documento.analisar');
+        Route::post('{id}/documentos/{documento}/analisar', [\App\Http\Controllers\ReceituarioController::class, 'analisarDocumento'])->whereIn('documento', ['carteira', 'comprovante', 'assinado'])->name('documento.analisar');
         Route::get('{id}/documento-assinado', [\App\Http\Controllers\ReceituarioController::class, 'documentoAssinado'])->name('documento-assinado');
     });
 

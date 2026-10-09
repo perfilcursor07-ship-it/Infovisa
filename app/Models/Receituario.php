@@ -226,11 +226,13 @@ class Receituario extends Model
 
     /**
      * Documentos do CADASTRO do profissional, analisados um a um pela Vigilância (como os de um processo).
-     * A requisição de receituário não faz parte do cadastro: ela pertence ao processo de receituário.
+     * A ficha cadastral assinada é gerada no passo 4 do cadastro. A requisição de receituário não faz parte
+     * do cadastro: ela pertence ao processo de receituário.
      */
     public const DOCUMENTOS = [
         'carteira' => ['nome' => 'Carteira do conselho', 'detalhe' => 'CRM, CRO ou CRMV · frente e verso', 'a' => 'a'],
         'comprovante' => ['nome' => 'Comprovante de endereço', 'detalhe' => 'Água, energia ou telefone fixo', 'a' => 'o'],
+        'assinado' => ['nome' => 'Ficha cadastral assinada', 'detalhe' => 'Assinada pelo gov.br ou à mão, com carimbo', 'a' => 'a'],
     ];
 
     /**
@@ -255,6 +257,7 @@ class Receituario extends Model
         return (bool) match ($documento) {
             'carteira' => $this->carteira_conselho_path,
             'comprovante' => $this->comprovante_endereco_path,
+            'assinado' => $this->documento_assinado_path,
             default => false,
         };
     }

@@ -22,6 +22,9 @@
         'comprovante' => array_values(array_filter([
             $arquivo('Comprovante', $receituario->comprovante_endereco_nome, $receituario->comprovante_endereco_path, route('admin.receituarios.comprovante', $receituario->id)),
         ])),
+        'assinado' => array_values(array_filter([
+            $arquivo('Ficha assinada', $receituario->documento_assinado_nome, $receituario->documento_assinado_path, route('admin.receituarios.documento-assinado', $receituario->id)),
+        ])),
     ];
     $tamanho = function (?int $bytes) {
         if (!$bytes) return null;
@@ -165,6 +168,13 @@
                                         </span>
                                     @endif
                                 @elseif($doc === 'comprovante')
+                                    @if(!empty($leituraComprovante['ciente_ilegivel']))
+                                        <span class="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-50 text-amber-800 text-[10px] rounded font-bold"
+                                              title="O comprovante não foi identificado na leitura automática. A empresa marcou que está ciente de que o documento pode estar ilegível e de que o cadastro poderá ser rejeitado{{ !empty($leituraComprovante['ciente_ilegivel_em']) ? ' (' . \Carbon\Carbon::parse($leituraComprovante['ciente_ilegivel_em'])->format('d/m/Y H:i') . ')' : '' }}.">
+                                            <i class="fas fa-exclamation-triangle" style="font-size: 9px;"></i>
+                                            Documento não identificado · empresa ciente
+                                        </span>
+                                    @endif
                                     @if(!empty($leituraComprovante['tipo']))
                                         <span class="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 text-[10px] rounded font-bold">{{ \App\Services\LeitorComprovanteEnderecoService::TIPOS[$leituraComprovante['tipo']] ?? '' }}</span>
                                     @endif

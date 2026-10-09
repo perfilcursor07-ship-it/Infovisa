@@ -7,6 +7,7 @@
     $urlVer = [
         'carteira' => route('company.receituarios.carteira', $receituario->id),
         'comprovante' => route('company.receituarios.comprovante', $receituario->id),
+        'assinado' => route('company.receituarios.documento-assinado', $receituario->id),
     ];
 @endphp
 <section class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -56,7 +57,32 @@
                     </div>
                 </div>
 
-                @if($situacao === 'rejeitado')
+                @if($situacao === 'rejeitado' && $doc === 'assinado')
+                    {{-- Ficha assinada rejeitada: gerar de novo (se precisar), assinar e reenviar aqui mesmo --}}
+                    <form method="POST" action="{{ route('company.receituarios.reenviar-assinado', $receituario->id) }}" enctype="multipart/form-data"
+                          class="mt-2.5 ml-11 rounded-xl border border-red-200 bg-red-50 p-3 space-y-2.5">
+                        @csrf
+                        <div class="text-xs text-red-900">
+                            <p><strong>Motivo da rejeição:</strong> <span class="whitespace-pre-line">{{ $analise['motivo'] ?? 'não informado' }}</span></p>
+                            <p class="mt-1 text-red-700">
+                                Baixe a ficha, assine pelo <a href="https://assinador.iti.br" target="_blank" rel="noopener" class="font-semibold underline">assinador gov.br</a>
+                                ou imprima, assine e carimbe, e envie de novo.
+                            </p>
+                        </div>
+                        <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+                            <a href="{{ route('company.receituarios.gerar-pdf', $receituario->id) }}" target="_blank" rel="noopener"
+                               class="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-red-700 bg-white border border-red-200 rounded-lg hover:bg-red-100 whitespace-nowrap">
+                                Baixar ficha (PDF)
+                            </a>
+                            <input type="file" name="documento_assinado" required accept="application/pdf,image/jpeg,image/png,image/webp"
+                                   class="flex-1 min-w-0 text-xs text-slate-700 file:mr-2 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-white file:text-red-700 file:font-semibold">
+                            <button type="submit" class="inline-flex items-center justify-center px-4 py-2 text-xs font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 whitespace-nowrap">
+                                Reenviar ficha assinada
+                            </button>
+                        </div>
+                        @error('documento_assinado')<p class="text-xs font-medium text-red-700">{{ $message }}</p>@enderror
+                    </form>
+                @elseif($situacao === 'rejeitado')
                     {{-- Rejeitado: a correção é feita no mesmo passo do cadastro (dados + novo arquivo) --}}
                     <div class="mt-2.5 ml-11 rounded-xl border border-red-200 bg-red-50 p-3 flex flex-col md:flex-row md:items-center gap-3">
                         <div class="flex-1 min-w-0 text-xs text-red-900">
