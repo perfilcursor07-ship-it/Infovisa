@@ -168,7 +168,7 @@
                     </span>
                     <div class="flex-1 min-w-0">
                         <p class="text-sm font-bold" :class="cienteIlegivel ? 'text-amber-900' : 'text-red-900'"
-                           x-text="erro && erro.startsWith('Muitas') ? erro : (poucaNitidez ? 'Documento com baixa nitidez' : 'Documento não identificado')"></p>
+                           x-text="erro && erro.startsWith('Muitas') ? erro : ('Documento não identificado' + (poucaNitidez ? ' (imagem com baixa nitidez)' : ''))"></p>
                         <p class="mt-0.5 text-xs" :class="cienteIlegivel ? 'text-amber-800' : 'text-red-800'">
                             Não conseguimos identificar os dados da carteira do conselho (<strong>nº do conselho, nome e CPF</strong>).
                             Um documento <strong>ilegível pode levar à rejeição do cadastro</strong> pela Vigilância Sanitária.
@@ -585,7 +585,7 @@
                     </span>
                     <div class="flex-1 min-w-0">
                         <p class="text-sm font-bold" :class="cienteIlegivel ? 'text-amber-900' : 'text-red-900'"
-                           x-text="erro && erro.startsWith('Muitas') ? erro : (poucaNitidez ? 'Comprovante com baixa nitidez' : 'Comprovante não identificado')"></p>
+                           x-text="erro && erro.startsWith('Muitas') ? erro : ('Comprovante não identificado' + (poucaNitidez ? ' (imagem com baixa nitidez)' : ''))"></p>
                         <p class="mt-0.5 text-xs" :class="cienteIlegivel ? 'text-amber-800' : 'text-red-800'">
                             Não conseguimos identificar os dados do comprovante de endereço (<strong>nome do titular, endereço e CEP</strong>).
                             Um documento <strong>ilegível pode levar à rejeição do cadastro</strong> pela Vigilância Sanitária.
@@ -1177,9 +1177,11 @@ function carteiraConselho(config) {
         get poucaNitidez() {
             return this.lido && !this.lendo && !this.dadosEssenciaisLidos && qualidadeBaixa(this.qualidade);
         },
-        // Carteira não lida (ou ilegível): exige arquivo melhor ou a ciência do usuário
+        // Carteira não identificada (a leitura falhou ou não achou nem o nº do conselho nem o nome):
+        // exige arquivo melhor ou a ciência do usuário. CPF duvidoso sozinho não conta (tem o selo próprio).
         get precisaCiencia() {
-            return !!(this.erro || this.poucaNitidez) && this.lido && !this.lendo && !!this.lados.frente.arquivo;
+            if (!this.lido || this.lendo || !this.lados.frente.arquivo) return false;
+            return !!this.erro || !(this.resultado?.numero_formatado || this.nomeCarteira);
         },
 
         // "A frente e o verso estão no mesmo arquivo"
@@ -1457,9 +1459,11 @@ function comprovanteEndereco(config) {
         get poucaNitidez() {
             return this.lido && !this.lendo && !this.dadosEssenciaisLidos && qualidadeBaixa(this.qualidade);
         },
-        // Comprovante não lido (ou ilegível): exige arquivo melhor ou a ciência do usuário
+        // Comprovante não identificado (a leitura falhou ou não achou titular, CEP nem endereço):
+        // exige arquivo melhor ou a ciência do usuário
         get precisaCiencia() {
-            return !!(this.erro || this.poucaNitidez) && this.lido && !this.lendo && !!this.arquivo;
+            if (!this.lido || this.lendo || !this.arquivo) return false;
+            return !!this.erro || !(this.titular || this.resultado?.cep || this.resultado?.endereco);
         },
         // confere | diferente | desconhecido (sem titular lido) | null (sem leitura)
         get situacao() {
