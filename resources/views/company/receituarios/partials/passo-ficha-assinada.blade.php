@@ -6,33 +6,41 @@
         fichaGerada: false,
         arquivoNome: '',
         arquivoTamanho: '',
+        salvo: false,
         async gerarFicha(acao) {
+            // Abre a janela já no clique (o navegador bloqueia pop-up aberto depois de esperar a resposta)
+            const janela = acao === 'imprimir' ? window.open('', '_blank') : null;
             this.gerando = true;
             this.erroFicha = '';
             try {
                 const form = this.$root.closest('form');
                 const dados = new FormData(form);
-                ['carteira_conselho', 'carteira_conselho_verso', 'comprovante_endereco', 'documento_assinado'].forEach(c => dados.delete(c));
-                const r = await fetch(@js(route('company.receituarios.ficha-previa')), {
+                dados.delete('documento_assinado');
+                const r = await fetch(@js(route('company.receituarios.rascunho')), {
                     method: 'POST',
                     body: dados,
-                    headers: { 'Accept': 'application/pdf', 'X-Requested-With': 'XMLHttpRequest' },
+                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
                 });
-                if (!r.ok) throw new Error('falha');
-                const url = URL.createObjectURL(await r.blob());
-                if (acao === 'imprimir') {
-                    window.open(url, '_blank');
+                const resposta = await r.json().catch(() => ({}));
+                if (!r.ok || !resposta.ok) {
+                    const erros = resposta.errors ? Object.values(resposta.errors).flat() : [];
+                    throw new Error(erros[0] || resposta.message || 'Não foi possível salvar o cadastro agora.');
+                }
+                this.salvo = true;
+                this.fichaGerada = true;
+                if (janela) {
+                    janela.location = resposta.ficha_url;
                 } else {
                     const a = document.createElement('a');
-                    a.href = url;
+                    a.href = resposta.ficha_url;
                     a.download = 'ficha-cadastral-receituario.pdf';
                     document.body.appendChild(a);
                     a.click();
                     a.remove();
                 }
-                this.fichaGerada = true;
             } catch (e) {
-                this.erroFicha = 'Não foi possível gerar a ficha agora. Confira os dados dos passos anteriores e tente de novo.';
+                if (janela) janela.close();
+                this.erroFicha = e.message + ' Confira os dados dos passos anteriores e tente de novo.';
             }
             this.gerando = false;
         },
@@ -54,7 +62,7 @@
                 <span class="w-7 h-7 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">1</span>
                 <div class="flex-1 min-w-0">
                     <p class="text-sm font-semibold text-slate-900">Baixe ou imprima a ficha cadastral</p>
-                    <p class="text-xs text-slate-500 mt-0.5">O PDF sai com os dados dos passos 1 a 3. Se alterar algum dado depois, gere a ficha de novo.</p>
+                    <p class="text-xs text-slate-500 mt-0.5">O PDF sai com os dados dos passos 1 a 3. Ao gerar a ficha, o cadastro fica <strong>salvo</strong>: você pode sair para assinar e voltar depois. Se alterar algum dado, gere a ficha de novo.</p>
                     <div class="mt-3 flex flex-wrap gap-2">
                         <button type="button" @click="gerarFicha('baixar')" :disabled="gerando"
                                 class="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-60">
@@ -69,6 +77,10 @@
                         <span x-show="fichaGerada" x-cloak class="self-center text-xs font-semibold text-emerald-700">✓ Ficha gerada</span>
                     </div>
                     <p x-show="erroFicha" x-cloak class="mt-2 text-xs font-medium text-red-600" x-text="erroFicha"></p>
+                    <div x-show="salvo" x-cloak class="mt-3 flex items-start gap-2 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-900">
+                        <svg class="w-4 h-4 flex-shrink-0 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        <span><strong>Cadastro salvo.</strong> Pode sair para assinar a ficha com calma. Quando voltar em <em>Receituários → Cadastrar profissional</em>, você continua daqui, só anexando a ficha assinada.</span>
+                    </div>
                 </div>
             </div>
         </li>

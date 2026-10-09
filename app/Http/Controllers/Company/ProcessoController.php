@@ -773,10 +773,12 @@ class ProcessoController extends Controller
             ->filter(function ($doc) {
                 $extensao = strtolower($doc->extensao ?? pathinfo($doc->nome_arquivo ?? '', PATHINFO_EXTENSION));
 
+                // Documentos de numeração (SNCR) aparecem dentro da requisição de receituário que os liberou
                 return $doc->tipo_usuario === 'interno'
                     && $extensao === 'pdf'
                     && $doc->tipo_documento !== 'documento_digital'
-                    && $doc->tipo_documento !== 'ordem_servico';
+                    && $doc->tipo_documento !== 'ordem_servico'
+                    && $doc->tipo_documento !== 'numeracao_receituario';
             });
 
         // Verifica se algum documento de notificação precisa ter o prazo iniciado automaticamente (§1º - 5 dias úteis)
@@ -857,6 +859,8 @@ class ProcessoController extends Controller
         $isProcessoReceituario = $processo->isProcessoReceituario();
         $requisicoesReceituario = $isProcessoReceituario ? $processo->requisicoesReceituario()->get() : collect();
         $receituarioAprovado = $isProcessoReceituario && (bool) $processo->estabelecimento->receituario?->isAprovado();
+        // Uma requisição por vez: com uma aguardando a Vigilância, não dá para pedir outra
+        $requisicaoEmAndamento = $isProcessoReceituario ? \App\Models\ReceituarioRequisicao::emAndamentoPara($processo) : null;
 
         // Busca documentos obrigatórios baseados nas atividades exercidas
         $documentosObrigatorios = $isProcessoReceituario
@@ -1052,7 +1056,8 @@ class ProcessoController extends Controller
             'avisoFilaPublicaPorUnidade',
             'isProcessoReceituario',
             'requisicoesReceituario',
-            'receituarioAprovado'
+            'receituarioAprovado',
+            'requisicaoEmAndamento'
         ));
     }
 

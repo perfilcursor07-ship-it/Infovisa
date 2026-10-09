@@ -140,6 +140,40 @@
                         <span class="ml-auto px-2 py-0.5 rounded-full text-[11px] font-semibold tabular-nums bg-indigo-100 text-indigo-700">{{ $receituario->usuariosVinculados->count() + ($receituario->usuario_externo_id ? 1 : 0) }}</span>
                     </button>
                 </nav>
+
+                {{-- Reiniciar a análise: somente administrador --}}
+                @if(auth('interno')->user()->isAdmin() && $externo && count($docsCadastro))
+                    <div class="mt-2 pt-2 border-t border-slate-100" x-data="{ reiniciando: false }">
+                        <button type="button" @click="reiniciando = true" class="{{ $itemMenu }} text-amber-700 hover:bg-amber-50">
+                            <svg class="{{ $iconeMenu }} !text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                            Reiniciar análise
+                        </button>
+                        <template x-teleport="body">
+                            <div x-show="reiniciando" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4" @keydown.escape.window="reiniciando = false">
+                                <div class="absolute inset-0 bg-slate-900/50" @click="reiniciando = false"></div>
+                                <form method="POST" action="{{ route('admin.receituarios.reiniciar', $receituario->id) }}" class="relative w-full max-w-md bg-white rounded-2xl shadow-xl p-5">
+                                    @csrf
+                                    <div class="flex items-start gap-3">
+                                        <span class="w-10 h-10 flex-shrink-0 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                        </span>
+                                        <div class="min-w-0">
+                                            <h3 class="text-base font-bold text-slate-900">Reiniciar análise do cadastro</h3>
+                                            <p class="mt-1 text-sm text-slate-600">Todos os documentos voltam para <strong>pendente</strong> e o cadastro volta para <strong>"em análise"</strong>. A Vigilância analisa tudo de novo; a empresa não precisa reenviar nada.</p>
+                                            @if($receituario->isAprovado())
+                                                <p class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">O cadastro está aprovado: até a nova aprovação a empresa não poderá abrir processos. Os processos já abertos continuam.</p>
+                                            @endif
+                                        </div>
+                                    </div>
+                                    <div class="mt-5 flex justify-end gap-2">
+                                        <button type="button" @click="reiniciando = false" class="h-9 px-4 text-sm font-semibold text-slate-600 hover:text-slate-900">Cancelar</button>
+                                        <button type="submit" class="h-9 px-4 text-sm font-semibold text-white bg-amber-600 rounded-lg hover:bg-amber-700">Reiniciar análise</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </template>
+                    </div>
+                @endif
             </div>
         </aside>
 

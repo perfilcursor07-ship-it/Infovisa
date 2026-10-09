@@ -160,7 +160,7 @@
             {{-- Logo Header --}}
             <div class="flex items-center h-16 px-4 border-b border-slate-100 flex-shrink-0"
                  :class="showLabels() ? 'justify-between' : 'lg:justify-center'">
-                <a href="{{ route('company.dashboard') }}" class="flex items-center gap-2.5 min-w-0">
+                <a href="{{ route(auth('externo')->user()?->rotaInicial() ?? 'company.dashboard') }}" class="flex items-center gap-2.5 min-w-0">
                     <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-md shadow-blue-500/30 flex-shrink-0">
                         <svg class="w-[18px] h-[18px] text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
@@ -204,7 +204,10 @@
             {{-- Navigation --}}
             <nav class="sidebar-nav flex-1 overflow-y-auto overflow-x-hidden py-3 px-2.5">
                 <p x-show="showLabels()" class="px-2.5 mb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-[0.12em]">Menu</p>
+                @php $usuarioMenu = auth('externo')->user(); @endphp
                 <div class="space-y-0.5">
+                    {{-- Módulo Licenciamento e processos --}}
+                    @if($usuarioMenu?->temModulo('processos'))
                     {{-- Dashboard --}}
                     @php $ativo = request()->routeIs('company.dashboard'); @endphp
                     <a href="{{ route('company.dashboard') }}"
@@ -301,8 +304,10 @@
                         </span>
                         @endif
                     </a>
+                    @endif
 
                     {{-- Receituários --}}
+                    @if($usuarioMenu?->temModulo('receituario'))
                     @php $ativo = request()->routeIs('company.receituarios.*'); @endphp
                     <a href="{{ route('company.receituarios.index') }}"
                        title="Receituários"
@@ -314,6 +319,7 @@
                         </svg>
                         <span x-show="showLabels()" class="truncate">Receituários</span>
                     </a>
+                    @endif
 
                     {{-- Meu Perfil --}}
                     @php $ativo = request()->routeIs('company.perfil.*'); @endphp

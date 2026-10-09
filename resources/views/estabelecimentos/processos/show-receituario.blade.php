@@ -42,7 +42,7 @@
     $itemMenu = 'w-full flex items-center gap-2.5 px-2 py-1.5 text-[13px] font-medium text-slate-700 hover:bg-slate-50 rounded-lg transition-colors';
 @endphp
 
-<div class="max-w-8xl mx-auto" x-data="{ modalArquivar: false, modalUpload: false }">
+<div class="max-w-8xl mx-auto" x-data="{ modalArquivar: false, modalUpload: false, modalExcluir: @js((bool) (request('excluir') || session('erro_exclusao'))) }">
 
     @foreach(['success' => 'emerald', 'error' => 'red'] as $chave => $cor)
         @if(session($chave))
@@ -208,6 +208,12 @@
                         Arquivar Processo
                     </button>
                     @endif
+                    @if(auth('interno')->user()->isAdmin())
+                    <button type="button" @click="modalExcluir = true" class="{{ $itemMenu }} !text-red-600 hover:!bg-red-50 [&>svg]:text-red-500">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                        Excluir Processo
+                    </button>
+                    @endif
                 </div>
             </div>
 
@@ -302,7 +308,7 @@
                             @endforeach
                         </div>
                         <div class="flex items-center justify-between gap-2 md:justify-end flex-shrink-0">
-                            <span class="inline-flex items-center rounded-md bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-700 tabular-nums">{{ $requisicao->totalBlocos() }} bloco(s)</span>
+                            <span class="inline-flex items-center rounded-md bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-700 tabular-nums">{{ $requisicao->rotuloQuantidade() }}</span>
                             <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold ring-1 ring-inset {{ $situacao['classe'] }}">
                                 <span class="w-1.5 h-1.5 rounded-full {{ $situacao['dot'] }}"></span>{{ $situacao['label'] }}
                             </span>
@@ -310,6 +316,33 @@
                         </div>
                     </a>
 
+                    {{-- Documentos de numeração (SNCR) liberados por esta requisição --}}
+                    @php $liberadosNaRequisicao = collect($requisicao->linhasPedidas())->filter(fn ($l) => $l['documento_id'] && $documentosRequisicao->has($l['documento_id'])); @endphp
+                    @if($liberadosNaRequisicao->isNotEmpty())
+                    <div class="px-4 pb-3 -mt-1">
+                        <p class="text-[10px] font-semibold text-emerald-700 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                            Documentos liberados ({{ $liberadosNaRequisicao->count() }})
+                        </p>
+                        <div class="grid grid-cols-1 gap-1.5">
+                            @foreach($liberadosNaRequisicao as $l)
+                            @php $doc = $documentosRequisicao->get($l['documento_id']); @endphp
+                            <div class="flex items-center gap-2 rounded-lg border border-emerald-100 bg-emerald-50/50 px-2 py-1.5">
+                                <span class="inline-flex items-center justify-center min-w-[1.75rem] h-6 px-1 rounded-md bg-emerald-600 text-white text-[11px] font-bold flex-shrink-0">{{ $l['tipo'] }}</span>
+                                <a href="{{ route('admin.estabelecimentos.processos.visualizar', [$estabelecimento->id, $processo->id, $doc->id]) }}" target="_blank" title="{{ $doc->nome_original }}"
+                                   class="min-w-0 flex-1 hover:text-blue-700">
+                                    <span class="block text-xs font-semibold text-slate-800 truncate">{{ $l['nome_tipo'] }} · {{ $l['rotulo_modalidade'] }}</span>
+                                    <span class="block text-[10px] text-slate-500">{{ number_format((int) $l['liberado'], 0, ',', '.') }} numeração(ões) liberada(s) · {{ strtoupper($doc->extensao) }} · {{ $doc->created_at->format('d/m/Y H:i') }}</span>
+                                </a>
+                                <a href="{{ route('admin.estabelecimentos.processos.download', [$estabelecimento->id, $processo->id, $doc->id]) }}" title="Baixar"
+                                   class="p-1 rounded-md text-slate-400 hover:text-blue-700 hover:bg-white flex-shrink-0">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                                </a>
+                            </div>
+                            @endforeach
+                        </div>
+                    </div>
+                    @endif
                 </article>
                 @empty
                 <div class="px-4 py-12 text-center">
@@ -457,5 +490,38 @@
         </form>
     </div>
     @endunless
+
+    {{-- Modal excluir (somente administrador) --}}
+    @if(auth('interno')->user()->isAdmin())
+    <div x-show="modalExcluir" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4" @keydown.escape.window="modalExcluir = false">
+        <div class="absolute inset-0 bg-slate-900/50" @click="modalExcluir = false"></div>
+        <form method="POST" action="{{ route('admin.estabelecimentos.processos.destroy', [$estabelecimento->id, $processo->id]) }}"
+              class="relative w-full max-w-md bg-white rounded-2xl shadow-xl p-5 space-y-3" x-data="{ senha: '' }">
+            @csrf
+            @method('DELETE')
+            <div class="flex items-start gap-3">
+                <span class="w-10 h-10 flex-shrink-0 rounded-xl bg-red-50 text-red-600 flex items-center justify-center">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                </span>
+                <div class="min-w-0">
+                    <h3 class="text-base font-semibold text-slate-900">Excluir processo {{ $processo->numero_processo }}</h3>
+                    <p class="mt-1 text-sm text-slate-600">O processo sai da área da Vigilância e da empresa. Os arquivos enviados nele são apagados e não podem ser recuperados.</p>
+                    @if($requisicoes->count() || $arquivos->count())
+                        <p class="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
+                            Este processo tem
+                            {{ collect([$requisicoes->count() ? $requisicoes->count() . ' ' . ($requisicoes->count() === 1 ? 'requisição' : 'requisições') : null, $arquivos->count() ? $arquivos->count() . ' ' . ($arquivos->count() === 1 ? 'arquivo' : 'arquivos') : null])->filter()->implode(' e ') }}.
+                        </p>
+                    @endif
+                </div>
+            </div>
+            @include('estabelecimentos.processos.partials.senha-exclusao', ['modelo' => 'senha'])
+            <div class="flex justify-end gap-2">
+                <button type="button" @click="modalExcluir = false" class="h-9 px-3.5 text-sm text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50">Cancelar</button>
+                <button type="submit" :disabled="!senha"
+                        class="h-9 px-3.5 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:bg-slate-300 disabled:cursor-not-allowed">Excluir processo</button>
+            </div>
+        </form>
+    </div>
+    @endif
 </div>
 @endsection

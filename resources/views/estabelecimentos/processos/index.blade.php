@@ -222,15 +222,17 @@
                                      @click.away="open = false"
                                      x-cloak
                                      class="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
-                                    <form action="{{ route('admin.estabelecimentos.processos.destroy', [$estabelecimento->id, $processo->id]) }}" 
-                                          method="POST"
-                                          onsubmit="return confirm('Tem certeza que deseja remover este processo?')">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button type="submit" class="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">
-                                            Remover
-                                        </button>
-                                    </form>
+                                    {{-- Excluir: somente administrador, confirmando com a senha da assinatura na tela do processo --}}
+                                    <a href="{{ route('admin.estabelecimentos.processos.show', [$estabelecimento->id, $processo->id]) }}"
+                                       class="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                                        Abrir processo
+                                    </a>
+                                    @if(auth('interno')->user()->isAdmin())
+                                        <a href="{{ route('admin.estabelecimentos.processos.show', [$estabelecimento->id, $processo->id, 'excluir' => 1]) }}"
+                                           class="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">
+                                            Excluir processo
+                                        </a>
+                                    @endif
                                 </div>
                             </div>
                         </div>

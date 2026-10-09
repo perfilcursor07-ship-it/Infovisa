@@ -1615,7 +1615,7 @@ class ProcessoController extends Controller
      * Remove um processo e todos os arquivos vinculados
      * APENAS ADMINISTRADOR pode excluir processos
      */
-    public function destroy($estabelecimentoId, $processoId)
+    public function destroy(Request $request, $estabelecimentoId, $processoId)
     {
         // Verifica se o usuário é administrador
         $usuario = auth('interno')->user();
@@ -1630,9 +1630,23 @@ class ProcessoController extends Controller
         
         $processo = Processo::where('estabelecimento_id', $estabelecimentoId)
             ->findOrFail($processoId);
-        
+
+        // Confirmação com a senha da assinatura digital do administrador
+        $voltarComErro = fn (string $mensagem) => redirect()
+            ->route('admin.estabelecimentos.processos.show', [$estabelecimentoId, $processoId, 'excluir' => 1])
+            ->with('erro_exclusao', $mensagem);
+        if (!$usuario->temSenhaAssinatura()) {
+            return $voltarComErro('Configure sua senha de assinatura digital antes de excluir processos.');
+        }
+        if (!$request->filled('senha_assinatura')) {
+            return $voltarComErro('Digite a senha da assinatura digital para confirmar a exclusão.');
+        }
+        if (!Hash::check($request->input('senha_assinatura'), $usuario->senha_assinatura_digital)) {
+            return $voltarComErro('Senha de assinatura incorreta.');
+        }
+
         $numeroProcesso = $processo->numero_processo;
-        
+
         // Busca todos os documentos do processo
         $documentos = ProcessoDocumento::where('processo_id', $processoId)->get();
         
@@ -1665,7 +1679,16 @@ class ProcessoController extends Controller
         
         // Exclui o processo
         $processo->delete();
-        
+
+        // Processo de receituário: o "estabelecimento" é o cadastro interno do profissional — volta para o cadastro dele
+        if ($estabelecimento->oculto_receituario && ($receituario = $estabelecimento->receituario)) {
+            \App\Models\Receituario::where('processo_id', $processo->id)->update(['processo_id' => null]);
+
+            return redirect()
+                ->route('admin.receituarios.show', ['id' => $receituario->id, 'aba' => 'processos'])
+                ->with('success', 'Processo ' . $numeroProcesso . ' e todos os arquivos vinculados foram removidos com sucesso!');
+        }
+
         return redirect()
             ->route('admin.estabelecimentos.processos.index', $estabelecimentoId)
             ->with('success', 'Processo ' . $numeroProcesso . ' e todos os arquivos vinculados foram removidos com sucesso!');
@@ -4494,8 +4517,13 @@ TXT;
             ->with(['usuarioExterno:id,nome', 'analisadoPor:id,nome'])
             ->get();
 
+        // Documentos de numeração (SNCR) ficam dentro da requisição que os liberou, não na lista geral
+        $idsDaRequisicao = $requisicoes->flatMap(fn ($r) => collect($r->documentos_liberacao ?? [])->flatten())->filter()->all();
+        $documentosRequisicao = $processo->documentos->whereIn('id', $idsDaRequisicao)->keyBy('id');
+
         $arquivos = $processo->documentos
             ->where('tipo_documento', '!=', 'documento_digital')
+            ->whereNotIn('id', $idsDaRequisicao)
             ->values();
 
         $documentosDigitais = \App\Models\DocumentoDigital::with(['tipoDocumento', 'usuarioCriador:id,nome'])
@@ -4510,7 +4538,7 @@ TXT;
             ->get();
 
         return view('estabelecimentos.processos.show-receituario', compact(
-            'estabelecimento', 'processo', 'receituario', 'requisicoes', 'arquivos', 'documentosDigitais', 'eventos'
+            'estabelecimento', 'processo', 'receituario', 'requisicoes', 'arquivos', 'documentosDigitais', 'eventos', 'documentosRequisicao'
         ));
     }
 
@@ -4544,6 +4572,157 @@ TXT;
         return view('estabelecimentos.processos.requisicao-receituario', compact(
             'estabelecimento', 'processo', 'requisicao', 'receituario', 'historico'
         ));
+    }
+
+    /**
+     * Libera a requisição de receituário: para cada tipo/modalidade liberado a Vigilância informa a quantidade
+     * e anexa o documento de numeração emitido no SNCR. O documento fica no processo, vinculado à requisição.
+     */
+    public function liberarRequisicaoReceituario(Request $request, $estabelecimentoId, $processoId, $requisicaoId)
+    {
+        [$estabelecimento, $processo, $requisicao] = $this->requisicaoParaAnalise($estabelecimentoId, $processoId, $requisicaoId);
+        $linhas = $requisicao->linhasPedidas();
+
+        $regras = ['observacao' => 'nullable|string|max:2000'];
+        foreach ($linhas as $l) {
+            $chave = "{$l['modalidade']}.{$l['tipo']}";
+            $regras["liberado.{$chave}"] = "required|integer|min:0|max:{$l['pedido']}";
+            $regras["documento.{$chave}"] = "required_unless:liberado.{$chave},0|nullable|file|mimes:pdf,jpg,jpeg,png|max:10240";
+        }
+        $dados = $request->validate($regras, [
+            'liberado.*.*.max' => 'A quantidade liberada não pode ser maior que a solicitada.',
+            'documento.*.*.required_unless' => 'Anexe o documento de numeração do SNCR de cada tipo liberado.',
+            'documento.*.*.mimes' => 'O documento deve ser PDF ou imagem.',
+            'documento.*.*.max' => 'Cada documento pode ter até 10 MB.',
+        ]);
+
+        $liberadas = [];
+        foreach (array_keys(\App\Models\ReceituarioRequisicao::MODALIDADES) as $m) {
+            foreach (\App\Models\ReceituarioRequisicao::TIPOS_NOTIFICACAO as $t) {
+                $liberadas[$m][$t] = (int) ($dados['liberado'][$m][$t] ?? 0);
+            }
+        }
+        if (collect($liberadas)->flatten()->sum() === 0) {
+            return back()->withInput()->withErrors(['liberado' => 'Nenhuma quantidade liberada. Para negar o pedido, use "Indeferir".']);
+        }
+
+        $salvos = [];
+        try {
+            DB::transaction(function () use ($request, $processo, $requisicao, $linhas, $liberadas, $dados, &$salvos) {
+                $documentos = [];
+                foreach ($linhas as $l) {
+                    if ($liberadas[$l['modalidade']][$l['tipo']] <= 0) {
+                        continue;
+                    }
+                    $arquivo = $request->file("documento.{$l['modalidade']}.{$l['tipo']}");
+                    $extensao = strtolower($arquivo->getClientOriginalExtension());
+                    $nomeArquivo = Str::slug("numeracao-{$requisicao->numero}-{$l['modalidade']}-{$l['tipo']}") . '_' . uniqid() . '.' . $extensao;
+                    $caminho = $arquivo->storeAs('processos/' . $processo->id, $nomeArquivo, 'local');
+                    $salvos[] = $caminho;
+
+                    $documento = ProcessoDocumento::create([
+                        'processo_id' => $processo->id,
+                        'usuario_id' => auth('interno')->id(),
+                        'tipo_usuario' => 'interno',
+                        'nome_arquivo' => $nomeArquivo,
+                        'nome_original' => "Numeração {$l['tipo']} ({$l['rotulo_modalidade']}) - Requisição {$requisicao->numero}.{$extensao}",
+                        'caminho' => $caminho,
+                        'extensao' => $extensao,
+                        'tamanho' => $arquivo->getSize(),
+                        'tipo_documento' => 'numeracao_receituario',
+                        'observacoes' => "Requisição nº {$requisicao->numero} · {$l['nome_tipo']} · {$l['rotulo_modalidade']} · "
+                            . $liberadas[$l['modalidade']][$l['tipo']] . ' numeração(ões) liberada(s) no SNCR',
+                    ]);
+                    $documentos[$l['modalidade']][$l['tipo']] = $documento->id;
+                }
+
+                $requisicao->update([
+                    'status' => 'liberada',
+                    'quantidades_liberadas' => $liberadas,
+                    'documentos_liberacao' => $documentos,
+                    'observacao_vigilancia' => $dados['observacao'] ?? null,
+                    'analisado_por' => auth('interno')->id(),
+                    'analisado_em' => now(),
+                ]);
+
+                ProcessoEvento::create([
+                    'processo_id' => $processo->id,
+                    'usuario_interno_id' => auth('interno')->id(),
+                    'tipo_evento' => 'requisicao_receituario_liberada',
+                    'titulo' => 'Requisição de receituário liberada',
+                    'descricao' => "Requisição nº {$requisicao->numero} liberada: " . $requisicao->rotuloQuantidade(collect($liberadas)->flatten()->sum())
+                        . ' · ' . count($salvos) . ' documento(s) de numeração anexado(s)',
+                    'dados_adicionais' => ['requisicao_id' => $requisicao->id, 'quantidades_liberadas' => $liberadas, 'documentos' => $documentos],
+                    'ip_address' => $request->ip(),
+                    'user_agent' => $request->userAgent(),
+                ]);
+            });
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Storage::disk('local')->delete($salvos);
+            throw $e;
+        }
+
+        return redirect()
+            ->route('admin.estabelecimentos.processos.requisicoes.show', [$estabelecimento->id, $processo->id, $requisicao->id])
+            ->with('success', "Requisição nº {$requisicao->numero} liberada. Os documentos de numeração já estão no processo para a empresa.");
+    }
+
+    /**
+     * Indefere a requisição de receituário (motivo obrigatório, visível para a empresa)
+     */
+    public function indeferirRequisicaoReceituario(Request $request, $estabelecimentoId, $processoId, $requisicaoId)
+    {
+        [$estabelecimento, $processo, $requisicao] = $this->requisicaoParaAnalise($estabelecimentoId, $processoId, $requisicaoId);
+
+        $dados = $request->validate(['motivo' => 'required|string|min:10|max:2000'], [
+            'motivo.required' => 'Informe o motivo do indeferimento.',
+            'motivo.min' => 'Descreva o motivo com pelo menos 10 caracteres.',
+        ]);
+
+        DB::transaction(function () use ($request, $processo, $requisicao, $dados) {
+            $requisicao->update([
+                'status' => 'indeferida',
+                'observacao_vigilancia' => $dados['motivo'],
+                'analisado_por' => auth('interno')->id(),
+                'analisado_em' => now(),
+            ]);
+
+            ProcessoEvento::create([
+                'processo_id' => $processo->id,
+                'usuario_interno_id' => auth('interno')->id(),
+                'tipo_evento' => 'requisicao_receituario_indeferida',
+                'titulo' => 'Requisição de receituário indeferida',
+                'descricao' => "Requisição nº {$requisicao->numero} indeferida: {$dados['motivo']}",
+                'dados_adicionais' => ['requisicao_id' => $requisicao->id],
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+        });
+
+        return redirect()
+            ->route('admin.estabelecimentos.processos.requisicoes.show', [$estabelecimento->id, $processo->id, $requisicao->id])
+            ->with('success', "Requisição nº {$requisicao->numero} indeferida. A empresa verá o motivo.");
+    }
+
+    /**
+     * Requisição de receituário ainda aguardando análise (senão volta com aviso)
+     */
+    private function requisicaoParaAnalise($estabelecimentoId, $processoId, $requisicaoId): array
+    {
+        $estabelecimento = Estabelecimento::findOrFail($estabelecimentoId);
+        $this->validarPermissaoAcesso($estabelecimento);
+
+        $processo = Processo::with('tipoProcesso')->where('estabelecimento_id', $estabelecimentoId)->findOrFail($processoId);
+        abort_unless($processo->isProcessoReceituario(), 404);
+
+        $requisicao = $processo->requisicoesReceituario()->findOrFail($requisicaoId);
+        if (!$requisicao->aguardandoAnalise()) {
+            abort(redirect()
+                ->route('admin.estabelecimentos.processos.requisicoes.show', [$estabelecimentoId, $processoId, $requisicaoId])
+                ->with('error', 'Esta requisição já foi analisada (' . mb_strtolower($requisicao->situacao['label']) . ').'));
+        }
+
+        return [$estabelecimento, $processo, $requisicao];
     }
 
     private function validarPermissaoAcesso($estabelecimento, ?Processo $processo = null)

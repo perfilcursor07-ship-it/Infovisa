@@ -21,7 +21,10 @@ class RegistroController extends Controller
         // Cadastro habilitado para todos os CPFs
         $cpfFornecido = preg_replace('/\D/', '', (string) $request->query('cpf', ''));
 
-        return view('auth.registro', compact('cpfFornecido'));
+        // Link direto para um módulo (ex.: /registro?modulo=receituario) já deixa a opção marcada
+        $moduloSugerido = array_key_exists($request->query('modulo'), UsuarioExterno::MODULOS) ? $request->query('modulo') : null;
+
+        return view('auth.registro', compact('cpfFornecido', 'moduloSugerido'));
     }
 
     /**
@@ -30,7 +33,8 @@ class RegistroController extends Controller
     public function registro(RegistroUsuarioExternoRequest $request)
     {
         // Dados já normalizados pelo FormRequest (CPF/telefone só dígitos, nome maiúsculo, e-mail minúsculo)
-        $dados = $request->safe()->only(['nome', 'cpf', 'email', 'telefone', 'password']);
+        $dados = $request->safe()->only(['nome', 'cpf', 'email', 'telefone', 'password', 'modulos']);
+        $dados['modulos'] = array_values(array_intersect(array_keys(UsuarioExterno::MODULOS), $dados['modulos']));
         $dados['vinculo_estabelecimento'] = VinculoEstabelecimento::PROPRIETARIO->value;
         $dados['ativo'] = true;
         $dados['aceite_termos_em'] = now();
@@ -75,7 +79,7 @@ class RegistroController extends Controller
         Auth::guard('externo')->login($usuario);
         $request->session()->regenerate();
 
-        return redirect()->route('company.dashboard')
+        return redirect()->route($usuario->rotaInicial())
             ->with('success', 'Cadastro realizado com sucesso! Bem-vindo ao InfoVISA.');
     }
 }

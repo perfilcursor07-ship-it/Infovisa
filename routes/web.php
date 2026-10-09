@@ -96,7 +96,7 @@ Route::middleware(['auth:externo', 'no-cache-auth'])->prefix('company')->name('c
     Route::put('/perfil/senha', [\App\Http\Controllers\Company\PerfilController::class, 'updateSenha'])->name('perfil.update-senha');
     
     // Receituários (solicitação pela empresa / profissional)
-    Route::prefix('receituarios')->name('receituarios.')->group(function () {
+    Route::prefix('receituarios')->name('receituarios.')->middleware('modulo.externo:receituario')->group(function () {
         Route::get('/', [\App\Http\Controllers\Company\ReceituarioController::class, 'index'])->name('index');
         Route::get('create', [\App\Http\Controllers\Company\ReceituarioController::class, 'create'])->name('create');
         Route::post('/', [\App\Http\Controllers\Company\ReceituarioController::class, 'store'])->name('store');
@@ -115,115 +115,123 @@ Route::middleware(['auth:externo', 'no-cache-auth'])->prefix('company')->name('c
         Route::post('{id}/corrigir/{documento}', [\App\Http\Controllers\Company\ReceituarioController::class, 'salvarCorrecao'])->whereNumber('id')->whereIn('documento', ['carteira', 'comprovante'])->name('salvar-correcao');
         Route::get('{id}/documento-assinado', [\App\Http\Controllers\Company\ReceituarioController::class, 'documentoAssinado'])->whereNumber('id')->name('documento-assinado');
         Route::post('{id}/documento-assinado', [\App\Http\Controllers\Company\ReceituarioController::class, 'reenviarAssinado'])->whereNumber('id')->name('reenviar-assinado');
-        Route::post('ficha-previa', [\App\Http\Controllers\Company\ReceituarioController::class, 'fichaPrevia'])->middleware('throttle:30,1')->name('ficha-previa');
+        Route::post('rascunho', [\App\Http\Controllers\Company\ReceituarioController::class, 'salvarRascunho'])->name('rascunho');
+        Route::get('{id}/continuar', [\App\Http\Controllers\Company\ReceituarioController::class, 'continuar'])->whereNumber('id')->name('continuar');
+        Route::post('{id}/concluir', [\App\Http\Controllers\Company\ReceituarioController::class, 'concluirRascunho'])->whereNumber('id')->name('concluir');
+        Route::delete('{id}/rascunho', [\App\Http\Controllers\Company\ReceituarioController::class, 'descartarRascunho'])->whereNumber('id')->name('descartar-rascunho');
         Route::post('{id}/processos', [\App\Http\Controllers\Company\ReceituarioController::class, 'abrirProcesso'])->whereNumber('id')->name('abrir-processo');
         Route::get('{id}', [\App\Http\Controllers\Company\ReceituarioController::class, 'show'])->whereNumber('id')->name('show');
     });
 
-    // Estabelecimentos
-    Route::get('/estabelecimentos', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'index'])->name('estabelecimentos.index');
-    Route::get('/estabelecimentos/create', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'create'])->name('estabelecimentos.create');
-    Route::get('/estabelecimentos/create/juridica', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'createJuridica'])->name('estabelecimentos.create.juridica');
-    Route::get('/estabelecimentos/create/fisica', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'createFisica'])->name('estabelecimentos.create.fisica');
-    Route::get('/estabelecimentos/create/unidade-movel', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'createUnidadeMovel'])->name('estabelecimentos.create.unidade-movel');
-    Route::post('/estabelecimentos', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'store'])->name('estabelecimentos.store');
-    Route::post('/estabelecimentos/buscar-questionarios', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'buscarQuestionarios'])->name('estabelecimentos.buscar-questionarios');
-    Route::get('/estabelecimentos/buscar-cnaes', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'buscarCnaes'])->name('estabelecimentos.buscar-cnaes');
-    Route::get('/estabelecimentos/verificar-nome-fantasia', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'verificarNomeFantasia'])->name('estabelecimentos.verificar-nome-fantasia');
-    // PJ Unidade Móvel: competência + usa_infovisa por município em tempo real (P4)
-    Route::post('/estabelecimentos/verificar-competencia-municipio', [\App\Http\Controllers\Api\CnpjController::class, 'verificarCompetenciaMunicipio'])->name('estabelecimentos.verificar-competencia-municipio');
-    
     // API de notificações para o app Android
     Route::get('/api/notificacoes', [\App\Http\Controllers\Api\NotificacaoAppController::class, 'index'])->name('api.notificacoes');
-    Route::get('/estabelecimentos/{id}', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'show'])->name('estabelecimentos.show');
-    Route::get('/estabelecimentos/{id}/edit', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'edit'])->name('estabelecimentos.edit');
-    Route::put('/estabelecimentos/{id}', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'update'])->name('estabelecimentos.update');
-    
-    // Estabelecimentos - Atividades
-    Route::get('/estabelecimentos/{id}/atividades', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'editAtividades'])->name('estabelecimentos.atividades.edit');
-    Route::put('/estabelecimentos/{id}/atividades', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'updateAtividades'])->name('estabelecimentos.atividades.update');
-    
-    // Estabelecimentos - Responsáveis
-    Route::get('/estabelecimentos/{id}/responsaveis', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'responsaveisIndex'])->name('estabelecimentos.responsaveis.index');
-    Route::get('/estabelecimentos/{id}/responsaveis/create/{tipo?}', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'responsaveisCreate'])->name('estabelecimentos.responsaveis.create');
-    Route::get('/estabelecimentos/{id}/responsaveis/{responsavelId}/edit/{tipo?}', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'responsaveisEdit'])->name('estabelecimentos.responsaveis.edit');
-    Route::post('/estabelecimentos/{id}/responsaveis', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'responsaveisStore'])->name('estabelecimentos.responsaveis.store');
-    Route::put('/estabelecimentos/{id}/responsaveis/{responsavelId}', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'responsaveisUpdate'])->name('estabelecimentos.responsaveis.update');
-    Route::delete('/estabelecimentos/{id}/responsaveis/{responsavelId}', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'responsaveisDestroy'])->name('estabelecimentos.responsaveis.destroy');
-    
-    // Estabelecimentos - Usuários Vinculados
-    Route::get('/estabelecimentos/{id}/usuarios', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'usuariosIndex'])->name('estabelecimentos.usuarios.index');
-    Route::post('/estabelecimentos/{id}/usuarios', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'usuariosStore'])->name('estabelecimentos.usuarios.store');
-    Route::put('/estabelecimentos/{id}/usuarios/{usuarioId}', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'usuariosUpdate'])->name('estabelecimentos.usuarios.update');
-    Route::delete('/estabelecimentos/{id}/usuarios/{usuarioId}', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'usuariosDestroy'])->name('estabelecimentos.usuarios.destroy');
-    
-    // Estabelecimentos - Equipamentos de Radiação Ionizante
-    Route::get('/estabelecimentos/{id}/equipamentos-radiacao', [\App\Http\Controllers\Company\EquipamentoRadiacaoController::class, 'index'])->name('estabelecimentos.equipamentos-radiacao.index');
-    Route::post('/estabelecimentos/{id}/equipamentos-radiacao', [\App\Http\Controllers\Company\EquipamentoRadiacaoController::class, 'store'])->name('estabelecimentos.equipamentos-radiacao.store');
-    // Rotas específicas ANTES das rotas com parâmetros dinâmicos
-    Route::post('/estabelecimentos/{id}/equipamentos-radiacao/declarar-sem-equipamentos', [\App\Http\Controllers\Company\EquipamentoRadiacaoController::class, 'declararSemEquipamentos'])->name('estabelecimentos.equipamentos-radiacao.declarar-sem-equipamentos');
-    Route::delete('/estabelecimentos/{id}/equipamentos-radiacao/revogar-declaracao', [\App\Http\Controllers\Company\EquipamentoRadiacaoController::class, 'revogarDeclaracao'])->name('estabelecimentos.equipamentos-radiacao.revogar-declaracao');
-    // Rotas com parâmetros dinâmicos
-    Route::put('/estabelecimentos/{id}/equipamentos-radiacao/{equipamentoId}', [\App\Http\Controllers\Company\EquipamentoRadiacaoController::class, 'update'])->name('estabelecimentos.equipamentos-radiacao.update');
-    Route::patch('/estabelecimentos/{id}/equipamentos-radiacao/{equipamentoId}/status', [\App\Http\Controllers\Company\EquipamentoRadiacaoController::class, 'updateStatus'])->name('estabelecimentos.equipamentos-radiacao.update-status');
-    Route::delete('/estabelecimentos/{id}/equipamentos-radiacao/{equipamentoId}', [\App\Http\Controllers\Company\EquipamentoRadiacaoController::class, 'destroy'])->name('estabelecimentos.equipamentos-radiacao.destroy');
-    
-    // Estabelecimentos - Processos
-    Route::get('/estabelecimentos/{id}/processos', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'processosIndex'])->name('estabelecimentos.processos.index');
-    Route::get('/estabelecimentos/{id}/processos/create', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'processosCreate'])->name('estabelecimentos.processos.create');
-    Route::post('/estabelecimentos/{id}/processos', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'processosStore'])->name('estabelecimentos.processos.store');
 
-    // Unidade Móvel - Municípios de Atuação
-    Route::get('/estabelecimentos/{id}/municipios-atuacao', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'municipiosAtuacaoIndex'])->name('estabelecimentos.municipios-atuacao');
-    Route::post('/estabelecimentos/{id}/adicionar-municipio-atuacao', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'adicionarMunicipioAtuacao'])->name('estabelecimentos.adicionar-municipio-atuacao');
-
-    // Unidade Móvel - Solicitação de credenciamento para estabelecimento já existente
-    Route::get('/estabelecimentos/{id}/solicitar-unidade-movel', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'solicitarUnidadeMovelForm'])->name('estabelecimentos.solicitar-unidade-movel');
-    Route::post('/estabelecimentos/{id}/solicitar-unidade-movel', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'solicitarUnidadeMovelStore'])->name('estabelecimentos.solicitar-unidade-movel.store');
-    
-    // Processos
-    Route::get('/processos', [\App\Http\Controllers\Company\ProcessoController::class, 'index'])->name('processos.index');
-    Route::get('/processos/{id}', [\App\Http\Controllers\Company\ProcessoController::class, 'show'])->name('processos.show');
-    Route::post('/processos/{id}/upload', [\App\Http\Controllers\Company\ProcessoController::class, 'uploadDocumento'])->name('processos.upload');
-    // Requisições de notificação/numeração de receita (somente processos de receituário)
-    Route::get('/processos/{id}/requisicoes-receituario/nova', [\App\Http\Controllers\Company\ReceituarioRequisicaoController::class, 'create'])->name('processos.receituario-requisicoes.create');
-    Route::post('/processos/{id}/requisicoes-receituario', [\App\Http\Controllers\Company\ReceituarioRequisicaoController::class, 'store'])->name('processos.receituario-requisicoes.store');
-    Route::get('/processos/{id}/requisicoes-receituario/{requisicao}', [\App\Http\Controllers\Company\ReceituarioRequisicaoController::class, 'show'])->name('processos.receituario-requisicoes.show');
-    Route::post('/processos/{id}/requisicoes-receituario/{requisicao}/cancelar', [\App\Http\Controllers\Company\ReceituarioRequisicaoController::class, 'cancelar'])->name('processos.receituario-requisicoes.cancelar');
-    Route::post('/processos/{id}/adicionar-unidade', [\App\Http\Controllers\Company\ProcessoController::class, 'adicionarUnidade'])->name('processos.adicionar-unidade');
-    Route::get('/processos/{id}/documentos/{documento}/download', [\App\Http\Controllers\Company\ProcessoController::class, 'downloadDocumento'])->name('processos.download');
-    Route::get('/processos/{id}/documentos/{documento}/visualizar', [\App\Http\Controllers\Company\ProcessoController::class, 'visualizarDocumento'])->name('processos.documento.visualizar');
-    Route::delete('/processos/{id}/documentos/{documento}', [\App\Http\Controllers\Company\ProcessoController::class, 'deleteDocumento'])->name('processos.documento.delete');
-    Route::post('/processos/{id}/documentos/{documento}/reenviar', [\App\Http\Controllers\Company\ProcessoController::class, 'reenviarDocumento'])->name('processos.reenviar');
-    
-    // Documentos digitais da vigilância (notificações, etc)
-    Route::get('/processos/{id}/documentos-vigilancia/{documento}/visualizar', [\App\Http\Controllers\Company\ProcessoController::class, 'visualizarDocumentoDigital'])->name('processos.documento-digital.visualizar');
-    Route::get('/processos/{id}/documentos-vigilancia/{documento}/download', [\App\Http\Controllers\Company\ProcessoController::class, 'downloadDocumentoDigital'])->name('processos.documento-digital.download');
-    
-    // Respostas a documentos digitais (notificações, etc)
-    Route::post('/processos/{id}/documentos-vigilancia/{documento}/resposta', [\App\Http\Controllers\Company\ProcessoController::class, 'enviarRespostaDocumento'])->name('processos.documento-digital.resposta');
-    Route::get('/processos/{id}/documentos-vigilancia/{documento}/respostas/{resposta}/download', [\App\Http\Controllers\Company\ProcessoController::class, 'downloadRespostaDocumento'])->name('processos.documento-digital.resposta.download');
-    Route::get('/processos/{id}/documentos-vigilancia/{documento}/respostas/{resposta}/visualizar', [\App\Http\Controllers\Company\ProcessoController::class, 'visualizarRespostaDocumento'])->name('processos.documento-digital.resposta.visualizar');
-    Route::delete('/processos/{id}/documentos-vigilancia/{documento}/respostas/{resposta}', [\App\Http\Controllers\Company\ProcessoController::class, 'excluirRespostaDocumento'])->name('processos.documento-digital.resposta.excluir');
-    
-    // Protocolo de Abertura do Processo (PDF)
-    Route::get('/processos/{id}/protocolo', [\App\Http\Controllers\Company\ProcessoController::class, 'protocoloAbertura'])->name('processos.protocolo');
-    
-    // Documento de Ajuda (PDF)
-    Route::get('/processos/{id}/documento-ajuda/{documento}', [\App\Http\Controllers\Company\ProcessoController::class, 'visualizarDocumentoAjuda'])->name('processos.documento-ajuda');
-    
     // Documentos de Ajuda (listagem global e visualização)
     Route::get('/documentos-ajuda/{documento}/visualizar', [\App\Http\Controllers\Company\DashboardController::class, 'visualizarDocumentoAjuda'])->name('documentos-ajuda.visualizar');
+
+    // Módulo Licenciamento e processos (os processos do receituário seguem o módulo receituário, ver EnsureModuloExterno)
+    Route::middleware('modulo.externo:processos')->group(function () {
+        // Estabelecimentos
+        Route::get('/estabelecimentos', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'index'])->name('estabelecimentos.index');
+        Route::get('/estabelecimentos/create', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'create'])->name('estabelecimentos.create');
+        Route::get('/estabelecimentos/create/juridica', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'createJuridica'])->name('estabelecimentos.create.juridica');
+        Route::get('/estabelecimentos/create/fisica', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'createFisica'])->name('estabelecimentos.create.fisica');
+        Route::get('/estabelecimentos/create/unidade-movel', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'createUnidadeMovel'])->name('estabelecimentos.create.unidade-movel');
+        Route::post('/estabelecimentos', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'store'])->name('estabelecimentos.store');
+        Route::post('/estabelecimentos/buscar-questionarios', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'buscarQuestionarios'])->name('estabelecimentos.buscar-questionarios');
+        Route::get('/estabelecimentos/buscar-cnaes', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'buscarCnaes'])->name('estabelecimentos.buscar-cnaes');
+        Route::get('/estabelecimentos/verificar-nome-fantasia', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'verificarNomeFantasia'])->name('estabelecimentos.verificar-nome-fantasia');
+        // PJ Unidade Móvel: competência + usa_infovisa por município em tempo real (P4)
+        Route::post('/estabelecimentos/verificar-competencia-municipio', [\App\Http\Controllers\Api\CnpjController::class, 'verificarCompetenciaMunicipio'])->name('estabelecimentos.verificar-competencia-municipio');
     
-    // Alertas do processo
-    Route::get('/alertas', [\App\Http\Controllers\Company\ProcessoController::class, 'alertasIndex'])->name('alertas.index');
-    Route::post('/processos/{id}/alertas/{alerta}/concluir', [\App\Http\Controllers\Company\ProcessoController::class, 'concluirAlerta'])->name('processos.alertas.concluir');
+        Route::get('/estabelecimentos/{id}', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'show'])->name('estabelecimentos.show');
+        Route::get('/estabelecimentos/{id}/edit', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'edit'])->name('estabelecimentos.edit');
+        Route::put('/estabelecimentos/{id}', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'update'])->name('estabelecimentos.update');
     
-    // Busca de usuários externos para vincular
-    Route::get('/usuarios-externos/buscar', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'buscarUsuariosExternos'])->name('usuarios-externos.buscar');
+        // Estabelecimentos - Atividades
+        Route::get('/estabelecimentos/{id}/atividades', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'editAtividades'])->name('estabelecimentos.atividades.edit');
+        Route::put('/estabelecimentos/{id}/atividades', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'updateAtividades'])->name('estabelecimentos.atividades.update');
     
-    // Busca de responsável por CPF
-    Route::post('/responsaveis/buscar-cpf', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'buscarResponsavelPorCpf'])->name('responsaveis.buscar-cpf');
+        // Estabelecimentos - Responsáveis
+        Route::get('/estabelecimentos/{id}/responsaveis', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'responsaveisIndex'])->name('estabelecimentos.responsaveis.index');
+        Route::get('/estabelecimentos/{id}/responsaveis/create/{tipo?}', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'responsaveisCreate'])->name('estabelecimentos.responsaveis.create');
+        Route::get('/estabelecimentos/{id}/responsaveis/{responsavelId}/edit/{tipo?}', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'responsaveisEdit'])->name('estabelecimentos.responsaveis.edit');
+        Route::post('/estabelecimentos/{id}/responsaveis', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'responsaveisStore'])->name('estabelecimentos.responsaveis.store');
+        Route::put('/estabelecimentos/{id}/responsaveis/{responsavelId}', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'responsaveisUpdate'])->name('estabelecimentos.responsaveis.update');
+        Route::delete('/estabelecimentos/{id}/responsaveis/{responsavelId}', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'responsaveisDestroy'])->name('estabelecimentos.responsaveis.destroy');
+    
+        // Estabelecimentos - Usuários Vinculados
+        Route::get('/estabelecimentos/{id}/usuarios', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'usuariosIndex'])->name('estabelecimentos.usuarios.index');
+        Route::post('/estabelecimentos/{id}/usuarios', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'usuariosStore'])->name('estabelecimentos.usuarios.store');
+        Route::put('/estabelecimentos/{id}/usuarios/{usuarioId}', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'usuariosUpdate'])->name('estabelecimentos.usuarios.update');
+        Route::delete('/estabelecimentos/{id}/usuarios/{usuarioId}', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'usuariosDestroy'])->name('estabelecimentos.usuarios.destroy');
+    
+        // Estabelecimentos - Equipamentos de Radiação Ionizante
+        Route::get('/estabelecimentos/{id}/equipamentos-radiacao', [\App\Http\Controllers\Company\EquipamentoRadiacaoController::class, 'index'])->name('estabelecimentos.equipamentos-radiacao.index');
+        Route::post('/estabelecimentos/{id}/equipamentos-radiacao', [\App\Http\Controllers\Company\EquipamentoRadiacaoController::class, 'store'])->name('estabelecimentos.equipamentos-radiacao.store');
+        // Rotas específicas ANTES das rotas com parâmetros dinâmicos
+        Route::post('/estabelecimentos/{id}/equipamentos-radiacao/declarar-sem-equipamentos', [\App\Http\Controllers\Company\EquipamentoRadiacaoController::class, 'declararSemEquipamentos'])->name('estabelecimentos.equipamentos-radiacao.declarar-sem-equipamentos');
+        Route::delete('/estabelecimentos/{id}/equipamentos-radiacao/revogar-declaracao', [\App\Http\Controllers\Company\EquipamentoRadiacaoController::class, 'revogarDeclaracao'])->name('estabelecimentos.equipamentos-radiacao.revogar-declaracao');
+        // Rotas com parâmetros dinâmicos
+        Route::put('/estabelecimentos/{id}/equipamentos-radiacao/{equipamentoId}', [\App\Http\Controllers\Company\EquipamentoRadiacaoController::class, 'update'])->name('estabelecimentos.equipamentos-radiacao.update');
+        Route::patch('/estabelecimentos/{id}/equipamentos-radiacao/{equipamentoId}/status', [\App\Http\Controllers\Company\EquipamentoRadiacaoController::class, 'updateStatus'])->name('estabelecimentos.equipamentos-radiacao.update-status');
+        Route::delete('/estabelecimentos/{id}/equipamentos-radiacao/{equipamentoId}', [\App\Http\Controllers\Company\EquipamentoRadiacaoController::class, 'destroy'])->name('estabelecimentos.equipamentos-radiacao.destroy');
+    
+        // Estabelecimentos - Processos
+        Route::get('/estabelecimentos/{id}/processos', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'processosIndex'])->name('estabelecimentos.processos.index');
+        Route::get('/estabelecimentos/{id}/processos/create', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'processosCreate'])->name('estabelecimentos.processos.create');
+        Route::post('/estabelecimentos/{id}/processos', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'processosStore'])->name('estabelecimentos.processos.store');
+
+        // Unidade Móvel - Municípios de Atuação
+        Route::get('/estabelecimentos/{id}/municipios-atuacao', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'municipiosAtuacaoIndex'])->name('estabelecimentos.municipios-atuacao');
+        Route::post('/estabelecimentos/{id}/adicionar-municipio-atuacao', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'adicionarMunicipioAtuacao'])->name('estabelecimentos.adicionar-municipio-atuacao');
+
+        // Unidade Móvel - Solicitação de credenciamento para estabelecimento já existente
+        Route::get('/estabelecimentos/{id}/solicitar-unidade-movel', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'solicitarUnidadeMovelForm'])->name('estabelecimentos.solicitar-unidade-movel');
+        Route::post('/estabelecimentos/{id}/solicitar-unidade-movel', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'solicitarUnidadeMovelStore'])->name('estabelecimentos.solicitar-unidade-movel.store');
+    
+        // Processos
+        Route::get('/processos', [\App\Http\Controllers\Company\ProcessoController::class, 'index'])->name('processos.index');
+        Route::get('/processos/{id}', [\App\Http\Controllers\Company\ProcessoController::class, 'show'])->name('processos.show');
+        Route::post('/processos/{id}/upload', [\App\Http\Controllers\Company\ProcessoController::class, 'uploadDocumento'])->name('processos.upload');
+        // Requisições de notificação/numeração de receita (somente processos de receituário)
+        Route::get('/processos/{id}/requisicoes-receituario/nova', [\App\Http\Controllers\Company\ReceituarioRequisicaoController::class, 'create'])->name('processos.receituario-requisicoes.create');
+        Route::post('/processos/{id}/requisicoes-receituario', [\App\Http\Controllers\Company\ReceituarioRequisicaoController::class, 'store'])->name('processos.receituario-requisicoes.store');
+        Route::get('/processos/{id}/requisicoes-receituario/{requisicao}', [\App\Http\Controllers\Company\ReceituarioRequisicaoController::class, 'show'])->name('processos.receituario-requisicoes.show');
+        Route::post('/processos/{id}/requisicoes-receituario/{requisicao}/cancelar', [\App\Http\Controllers\Company\ReceituarioRequisicaoController::class, 'cancelar'])->name('processos.receituario-requisicoes.cancelar');
+        Route::post('/processos/{id}/adicionar-unidade', [\App\Http\Controllers\Company\ProcessoController::class, 'adicionarUnidade'])->name('processos.adicionar-unidade');
+        Route::get('/processos/{id}/documentos/{documento}/download', [\App\Http\Controllers\Company\ProcessoController::class, 'downloadDocumento'])->name('processos.download');
+        Route::get('/processos/{id}/documentos/{documento}/visualizar', [\App\Http\Controllers\Company\ProcessoController::class, 'visualizarDocumento'])->name('processos.documento.visualizar');
+        Route::delete('/processos/{id}/documentos/{documento}', [\App\Http\Controllers\Company\ProcessoController::class, 'deleteDocumento'])->name('processos.documento.delete');
+        Route::post('/processos/{id}/documentos/{documento}/reenviar', [\App\Http\Controllers\Company\ProcessoController::class, 'reenviarDocumento'])->name('processos.reenviar');
+    
+        // Documentos digitais da vigilância (notificações, etc)
+        Route::get('/processos/{id}/documentos-vigilancia/{documento}/visualizar', [\App\Http\Controllers\Company\ProcessoController::class, 'visualizarDocumentoDigital'])->name('processos.documento-digital.visualizar');
+        Route::get('/processos/{id}/documentos-vigilancia/{documento}/download', [\App\Http\Controllers\Company\ProcessoController::class, 'downloadDocumentoDigital'])->name('processos.documento-digital.download');
+    
+        // Respostas a documentos digitais (notificações, etc)
+        Route::post('/processos/{id}/documentos-vigilancia/{documento}/resposta', [\App\Http\Controllers\Company\ProcessoController::class, 'enviarRespostaDocumento'])->name('processos.documento-digital.resposta');
+        Route::get('/processos/{id}/documentos-vigilancia/{documento}/respostas/{resposta}/download', [\App\Http\Controllers\Company\ProcessoController::class, 'downloadRespostaDocumento'])->name('processos.documento-digital.resposta.download');
+        Route::get('/processos/{id}/documentos-vigilancia/{documento}/respostas/{resposta}/visualizar', [\App\Http\Controllers\Company\ProcessoController::class, 'visualizarRespostaDocumento'])->name('processos.documento-digital.resposta.visualizar');
+        Route::delete('/processos/{id}/documentos-vigilancia/{documento}/respostas/{resposta}', [\App\Http\Controllers\Company\ProcessoController::class, 'excluirRespostaDocumento'])->name('processos.documento-digital.resposta.excluir');
+    
+        // Protocolo de Abertura do Processo (PDF)
+        Route::get('/processos/{id}/protocolo', [\App\Http\Controllers\Company\ProcessoController::class, 'protocoloAbertura'])->name('processos.protocolo');
+    
+        // Documento de Ajuda (PDF)
+        Route::get('/processos/{id}/documento-ajuda/{documento}', [\App\Http\Controllers\Company\ProcessoController::class, 'visualizarDocumentoAjuda'])->name('processos.documento-ajuda');
+    
+    
+        // Alertas do processo
+        Route::get('/alertas', [\App\Http\Controllers\Company\ProcessoController::class, 'alertasIndex'])->name('alertas.index');
+        Route::post('/processos/{id}/alertas/{alerta}/concluir', [\App\Http\Controllers\Company\ProcessoController::class, 'concluirAlerta'])->name('processos.alertas.concluir');
+    
+        // Busca de usuários externos para vincular
+        Route::get('/usuarios-externos/buscar', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'buscarUsuariosExternos'])->name('usuarios-externos.buscar');
+    
+        // Busca de responsável por CPF
+        Route::post('/responsaveis/buscar-cpf', [\App\Http\Controllers\Company\EstabelecimentoController::class, 'buscarResponsavelPorCpf'])->name('responsaveis.buscar-cpf');
+    });
 
     // Assistente IA (usuário externo)
     Route::post('/ia/chat', [\App\Http\Controllers\AssistenteIAController::class, 'chatExterno'])->name('ia.chat');
@@ -425,6 +433,8 @@ Route::middleware(['auth:interno', 'no-cache-auth'])->prefix('admin')->name('adm
     Route::get('/estabelecimentos/{id}/processos/{processo}', [\App\Http\Controllers\ProcessoController::class, 'show'])->name('estabelecimentos.processos.show');
     Route::get('/estabelecimentos/{id}/processos/{processo}/integra', [\App\Http\Controllers\ProcessoController::class, 'integra'])->name('estabelecimentos.processos.integra');
     Route::get('/estabelecimentos/{id}/processos/{processo}/requisicoes/{requisicao}', [\App\Http\Controllers\ProcessoController::class, 'showRequisicaoReceituario'])->whereNumber('requisicao')->name('estabelecimentos.processos.requisicoes.show');
+    Route::post('/estabelecimentos/{id}/processos/{processo}/requisicoes/{requisicao}/liberar', [\App\Http\Controllers\ProcessoController::class, 'liberarRequisicaoReceituario'])->whereNumber('requisicao')->name('estabelecimentos.processos.requisicoes.liberar');
+    Route::post('/estabelecimentos/{id}/processos/{processo}/requisicoes/{requisicao}/indeferir', [\App\Http\Controllers\ProcessoController::class, 'indeferirRequisicaoReceituario'])->whereNumber('requisicao')->name('estabelecimentos.processos.requisicoes.indeferir');
     Route::patch('/estabelecimentos/{id}/processos/{processo}/status', [\App\Http\Controllers\ProcessoController::class, 'updateStatus'])->name('estabelecimentos.processos.updateStatus');
     Route::post('/estabelecimentos/{id}/processos/{processo}/acompanhar', [\App\Http\Controllers\ProcessoController::class, 'toggleAcompanhamento'])->name('estabelecimentos.processos.toggleAcompanhamento');
     Route::get('/estabelecimentos/{id}/processos/{processo}/acompanhar', function ($id, $processo) {
@@ -640,6 +650,7 @@ Route::middleware(['auth:interno', 'no-cache-auth'])->prefix('admin')->name('adm
         Route::get('{id}/usuarios/buscar', [\App\Http\Controllers\ReceituarioController::class, 'usuariosBuscar'])->whereNumber('id')->name('usuarios.buscar');
         Route::post('{id}/usuarios', [\App\Http\Controllers\ReceituarioController::class, 'usuariosStore'])->whereNumber('id')->name('usuarios.store');
         Route::delete('{id}/usuarios/{usuario}', [\App\Http\Controllers\ReceituarioController::class, 'usuariosDestroy'])->whereNumber('id')->whereNumber('usuario')->name('usuarios.destroy');
+        Route::post('{id}/reiniciar', [\App\Http\Controllers\ReceituarioController::class, 'reiniciar'])->name('reiniciar');
         Route::post('{id}/documentos/{documento}/analisar', [\App\Http\Controllers\ReceituarioController::class, 'analisarDocumento'])->whereIn('documento', ['carteira', 'comprovante', 'assinado'])->name('documento.analisar');
         Route::get('{id}/documento-assinado', [\App\Http\Controllers\ReceituarioController::class, 'documentoAssinado'])->name('documento-assinado');
     });
@@ -879,7 +890,7 @@ Route::middleware(['auth:interno', 'no-cache-auth'])->prefix('admin')->name('adm
         });
     });
     
-    // WhatsApp - Configuração e Painel - Apenas Admin (fora do grupo configuracoes)
+    // WhatsApp - Configuração - Apenas Admin (fora do grupo configuracoes)
     Route::prefix('whatsapp')->name('whatsapp.')->middleware('admin')->group(function () {
         // Configuração
         Route::get('/configuracao', [\App\Http\Controllers\Admin\WhatsappConfiguracaoController::class, 'index'])->name('configuracao');
@@ -890,13 +901,6 @@ Route::middleware(['auth:interno', 'no-cache-auth'])->prefix('admin')->name('adm
         Route::post('/encerrar-sessao', [\App\Http\Controllers\Admin\WhatsappConfiguracaoController::class, 'encerrarSessao'])->name('encerrar-sessao');
         Route::post('/enviar-teste', [\App\Http\Controllers\Admin\WhatsappConfiguracaoController::class, 'enviarTeste'])->name('enviar-teste');
 
-        // Painel de Mensagens
-        Route::get('/painel', [\App\Http\Controllers\Admin\WhatsappPainelController::class, 'index'])->name('painel');
-        Route::get('/mensagens/{id}/detalhes', [\App\Http\Controllers\Admin\WhatsappPainelController::class, 'detalhes'])->name('mensagens.detalhes');
-        Route::post('/mensagens/{id}/reenviar', [\App\Http\Controllers\Admin\WhatsappPainelController::class, 'reenviar'])->name('mensagens.reenviar');
-        Route::post('/reenviar-todas', [\App\Http\Controllers\Admin\WhatsappPainelController::class, 'reenviarTodas'])->name('reenviar-todas');
-        Route::delete('/mensagens/{id}', [\App\Http\Controllers\Admin\WhatsappPainelController::class, 'destroy'])->name('mensagens.destroy');
-        Route::get('/exportar', [\App\Http\Controllers\Admin\WhatsappPainelController::class, 'exportar'])->name('exportar');
     });
     
     // Assistente IA

@@ -35,6 +35,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin.gestor' => \App\Http\Middleware\EnsureUserIsAdminOrGestor::class,
             'admin.gestor.estadual' => \App\Http\Middleware\EnsureUserIsAdminOrGestorEstadual::class,
             'no-cache-auth' => \App\Http\Middleware\PreventAuthenticatedPageCaching::class,
+            'modulo.externo' => \App\Http\Middleware\EnsureModuloExterno::class,
         ]);
         
         // Configurar redirect para usuários não autenticados

@@ -24,8 +24,9 @@ class ReceituarioRequisicaoController extends Controller
         $receituario = $processo->estabelecimento->receituario;
         $requisitante = ReceituarioRequisicao::dadosRequisitante($receituario);
         $ultimaRequisicao = $processo->requisicoesReceituario()->where('status', '!=', 'cancelada')->first();
+        $limites = ReceituarioRequisicao::limitesPara($receituario->especialidade);
 
-        return view('company.processos.receituario-requisicoes.create', compact('processo', 'requisitante', 'ultimaRequisicao'));
+        return view('company.processos.receituario-requisicoes.create', compact('processo', 'requisitante', 'ultimaRequisicao', 'limites'));
     }
 
     public function store(Request $request, $processoId)
@@ -58,10 +59,18 @@ class ReceituarioRequisicaoController extends Controller
         }
 
         if (collect($quantidades)->flatten()->sum() === 0) {
-            return back()->withInput()->withErrors(['quantidades' => 'Informe a quantidade de pelo menos um tipo de notificação.']);
+            return back()->withInput()->withErrors(['quantidades' => 'Informe a quantidade de numerações de pelo menos um tipo de notificação.']);
         }
 
         $receituario = $processo->estabelecimento->receituario;
+
+        // Acima do parâmetro da DVISA (ou tipo fora da especialidade): a Vigilância precisa da justificativa
+        $acimaDoLimite = ReceituarioRequisicao::tiposQuePedemJustificativa($quantidades, $receituario->especialidade);
+        if ($acimaDoLimite && trim((string) ($dados['justificativa'] ?? '')) === '') {
+            return back()->withInput()->withErrors([
+                'justificativa' => 'Explique por que precisa dessa quantidade de ' . implode(', ', $acimaDoLimite) . ' (acima do limite de referência).',
+            ]);
+        }
         $usuario = auth('externo')->user();
 
         $requisicao = DB::transaction(function () use ($processo, $receituario, $quantidades, $dados, $usuario, $request) {
@@ -71,6 +80,7 @@ class ReceituarioRequisicaoController extends Controller
                 'processo_id' => $processo->id,
                 'receituario_id' => $receituario->id,
                 'quantidades' => $quantidades,
+                'unidade' => 'numeracoes',
                 'justificativa' => $dados['justificativa'] ?? null,
                 'requisitante' => ReceituarioRequisicao::dadosRequisitante($receituario),
                 'declaracoes' => collect(ReceituarioRequisicao::DECLARACOES)->map(fn ($texto) => ['texto' => $texto, 'aceito' => true])->all(),
@@ -86,7 +96,7 @@ class ReceituarioRequisicaoController extends Controller
                 'usuario_interno_id' => null,
                 'tipo_evento' => 'requisicao_receituario_enviada',
                 'titulo' => 'Requisição de receituário enviada',
-                'descricao' => "Requisição nº {$requisicao->numero} enviada por {$usuario->nome} ({$requisicao->totalBlocos()} bloco(s) solicitados)",
+                'descricao' => "Requisição nº {$requisicao->numero} enviada por {$usuario->nome} ({$requisicao->rotuloQuantidade()} solicitadas)",
                 'dados_adicionais' => [
                     'requisicao_id' => $requisicao->id,
                     'numero' => $requisicao->numero,
@@ -174,6 +184,13 @@ class ReceituarioRequisicaoController extends Controller
         if (!$receituario || !$receituario->isAprovado()) {
             abort(redirect()->route('company.processos.show', $processo->id)
                 ->with('error', 'O cadastro de receituário precisa estar aprovado para solicitar notificações de receita.'));
+        }
+
+        // Uma requisição por vez: enquanto a anterior aguarda a Vigilância, não dá para pedir outra
+        if ($emAndamento = ReceituarioRequisicao::emAndamentoPara($processo)) {
+            abort(redirect()->route('company.processos.receituario-requisicoes.show', [$emAndamento->processo_id, $emAndamento->id])
+                ->with('error', "A requisição nº {$emAndamento->numero} ainda está aguardando a análise da Vigilância Sanitária. "
+                    . 'Aguarde a liberação' . ($emAndamento->podeSerCancelada() ? ' (ou cancele-a)' : '') . ' para fazer uma nova requisição.'));
         }
     }
 

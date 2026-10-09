@@ -1,6 +1,8 @@
 {{-- Requisições de notificação/numeração de receita (somente processos de receituário) --}}
 @php
-    $podeNovaRequisicao = !$processoArquivado && $receituarioAprovado;
+    $requisicaoEmAndamento ??= null;
+    // Uma requisição por vez: com uma aguardando a Vigilância, não dá para pedir outra
+    $podeNovaRequisicao = !$processoArquivado && $receituarioAprovado && !$requisicaoEmAndamento;
 @endphp
 <section id="secao-requisicoes" class="scroll-mt-4 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
     <header class="px-4 py-3 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
@@ -21,6 +23,18 @@
         </a>
         @endif
     </header>
+
+    @if($requisicaoEmAndamento && !$processoArquivado)
+    <div class="mx-4 mt-3 flex flex-col sm:flex-row sm:items-center gap-2 p-2.5 rounded-lg bg-blue-50 border border-blue-200 text-xs text-blue-900">
+        <svg class="w-4 h-4 flex-shrink-0 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <span class="flex-1">
+            A requisição <strong>nº {{ $requisicaoEmAndamento->numero }}</strong> está aguardando a análise da Vigilância Sanitária.
+            Você poderá fazer uma nova requisição depois que ela for liberada ou indeferida{{ $requisicaoEmAndamento->podeSerCancelada() ? ' — ou se cancelá-la' : '' }}.
+        </span>
+        <a href="{{ route('company.processos.receituario-requisicoes.show', [$requisicaoEmAndamento->processo_id, $requisicaoEmAndamento->id]) }}"
+           class="self-start sm:self-auto font-semibold text-blue-700 hover:underline whitespace-nowrap">Ver requisição →</a>
+    </div>
+    @endif
 
     @if(!$receituarioAprovado && !$processoArquivado)
     <div class="mx-4 mt-3 flex items-start gap-2 p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
@@ -73,6 +87,34 @@
                     <svg class="w-4 h-4 text-slate-300 group-hover:text-blue-600 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                 </div>
             </a>
+
+            {{-- Documentos de numeração (SNCR) liberados por esta requisição --}}
+            @php
+                $documentosDaRequisicao = $requisicao->status === 'liberada' ? $requisicao->documentosLiberados() : collect();
+                $liberadosNaRequisicao = collect($requisicao->linhasPedidas())->filter(fn ($l) => $l['documento_id'] && $documentosDaRequisicao->has($l['documento_id']));
+            @endphp
+            @if($liberadosNaRequisicao->isNotEmpty())
+            <div class="px-4 pb-3 -mt-1">
+                <p class="text-[10px] font-semibold text-emerald-700 uppercase tracking-wider mb-1.5">✓ Documentos de numeração ({{ $liberadosNaRequisicao->count() }})</p>
+                <div class="grid grid-cols-1 gap-1.5">
+                    @foreach($liberadosNaRequisicao as $l)
+                    @php $doc = $documentosDaRequisicao->get($l['documento_id']); @endphp
+                    <div class="flex items-center gap-2 rounded-lg border border-emerald-100 bg-emerald-50/50 px-2 py-1.5">
+                        <span class="inline-flex items-center justify-center min-w-[1.75rem] h-6 px-1 rounded-md bg-emerald-600 text-white text-[11px] font-bold flex-shrink-0">{{ $l['tipo'] }}</span>
+                        <a href="{{ route('company.processos.documento.visualizar', [$processo->id, $doc->id]) }}" target="_blank" title="{{ $doc->nome_original }}"
+                           class="min-w-0 flex-1 hover:text-blue-700">
+                            <span class="block text-xs font-semibold text-slate-800 truncate">{{ $l['nome_tipo'] }} · {{ $l['rotulo_modalidade'] }}</span>
+                            <span class="block text-[10px] text-slate-500">{{ number_format((int) $l['liberado'], 0, ',', '.') }} numeração(ões) liberada(s) · clique para ver</span>
+                        </a>
+                        <a href="{{ route('company.processos.download', [$processo->id, $doc->id]) }}" title="Baixar"
+                           class="p-1 rounded-md text-slate-400 hover:text-blue-700 hover:bg-white flex-shrink-0">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                        </a>
+                    </div>
+                    @endforeach
+                </div>
+            </div>
+            @endif
         </li>
         @endforeach
     </ul>

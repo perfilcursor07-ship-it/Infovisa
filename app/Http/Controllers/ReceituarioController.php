@@ -47,7 +47,9 @@ class ReceituarioController extends Controller
             return $redirect;
         }
         
-        $query = Receituario::with(['municipio', 'processo', 'usuarioExterno:id,nome', 'estabelecimento' => fn ($q) => $q->withCount('processos')]);
+        // Rascunhos (empresa ainda não anexou a ficha assinada) não chegam à Vigilância
+        $query = Receituario::with(['municipio', 'processo', 'usuarioExterno:id,nome', 'estabelecimento' => fn ($q) => $q->withCount('processos')])
+            ->where('status', '!=', 'rascunho');
 
         // Filtros
         if ($request->filled('tipo')) {
@@ -76,7 +78,7 @@ class ReceituarioController extends Controller
             : $query->orderBy('created_at', 'desc'))
             ->paginate(20)->withQueryString();
 
-        $porStatus = Receituario::selectRaw('status, count(*) as total')->groupBy('status')->pluck('total', 'status');
+        $porStatus = Receituario::where('status', '!=', 'rascunho')->selectRaw('status, count(*) as total')->groupBy('status')->pluck('total', 'status');
 
         return view('receituarios.index', compact('receituarios', 'status', 'porStatus'));
     }
@@ -97,8 +99,8 @@ class ReceituarioController extends Controller
         if (!in_array($documento, $receituario->documentosDaAnalise(), true) || !$receituario->temDocumento($documento)) {
             return back()->with('error', 'Documento não encontrado neste cadastro.');
         }
-        if ($receituario->status === 'aguardando_assinatura') {
-            return back()->with('error', 'Aguarde a empresa enviar a requisição assinada para analisar os documentos.');
+        if (in_array($receituario->status, ['aguardando_assinatura', 'rascunho'], true)) {
+            return back()->with('error', 'Aguarde a empresa concluir o cadastro e enviar a ficha assinada para analisar os documentos.');
         }
 
         $validated = $request->validate([
@@ -123,26 +125,54 @@ class ReceituarioController extends Controller
                     . ($eraAprovado ? ' O cadastro voltou para "em análise" até a nova aprovação.' : ''));
         }
 
-        \Illuminate\Support\Facades\DB::transaction(function () use ($receituario, $documento, $validated, $cadastro) {
+        $processoAberto = \Illuminate\Support\Facades\DB::transaction(function () use ($receituario, $documento, $validated, $cadastro, $eraAprovado) {
             $receituario->analisarDocumento(
                 $documento,
                 $validated['acao'] === 'aprovar' ? 'aprovado' : 'rejeitado',
                 $validated['motivo'] ?? null,
                 Auth::guard('interno')->id()
             );
-            // Todos os documentos aprovados: cria o cadastro interno onde ficarão os processos de receituário
-            if ($receituario->isAprovado()) {
-                $cadastro->garantirEstabelecimento($receituario);
+            if (!$receituario->isAprovado()) {
+                return null;
             }
+            // Todos os documentos aprovados: cria o cadastro interno e já abre o processo de receituário
+            $cadastro->garantirEstabelecimento($receituario);
+
+            return $eraAprovado ? null : $cadastro->abrirProcessoAutomatico($receituario);
         });
 
         $mensagem = match (true) {
-            $receituario->isAprovado() && !$eraAprovado => Receituario::frase($documento, 'aprovad') . '. Todos os documentos foram aprovados: cadastro aprovado e a empresa já pode abrir o processo de receituário.',
+            $processoAberto !== null => Receituario::frase($documento, 'aprovad') . '. Todos os documentos foram aprovados: cadastro aprovado e o processo de receituário nº ' . $processoAberto->numero_processo . ' foi aberto automaticamente.',
+            $receituario->isAprovado() && !$eraAprovado => Receituario::frase($documento, 'aprovad') . '. Todos os documentos foram aprovados: cadastro aprovado.',
             $validated['acao'] === 'aprovar' => Receituario::frase($documento, 'aprovad') . '.',
             default => Receituario::frase($documento, 'rejeitad') . '. A empresa verá o motivo e reenviará este documento.',
         };
 
         return redirect()->route('admin.receituarios.show', ['id' => $receituario->id, 'aba' => 'documentos'])->with('success', $mensagem);
+    }
+
+    /**
+     * Reinicia a análise do cadastro: todos os documentos voltam para pendente (somente administrador)
+     */
+    public function reiniciar($id)
+    {
+        if ($redirect = $this->verificarPermissao()) {
+            return $redirect;
+        }
+        if (!auth('interno')->user()->isAdmin()) {
+            return back()->with('error', 'Somente o administrador pode reiniciar a análise do cadastro.');
+        }
+
+        $receituario = Receituario::findOrFail($id);
+        if (!$receituario->isSolicitacaoExterna() || empty($receituario->documentosDaAnalise())) {
+            return back()->with('error', 'Este cadastro não tem documentos para analisar.');
+        }
+
+        $receituario->reiniciarAnalise();
+        $receituario->update(['usuario_atualizacao_id' => auth('interno')->id()]);
+
+        return redirect()->route('admin.receituarios.show', ['id' => $receituario->id, 'aba' => 'documentos'])
+            ->with('success', 'Análise reiniciada: todos os documentos voltaram para pendente e o cadastro está "em análise" de novo.');
     }
 
     public function documentoAssinado($id)

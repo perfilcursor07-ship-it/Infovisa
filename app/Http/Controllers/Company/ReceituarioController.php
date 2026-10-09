@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Company;
 use App\Http\Controllers\Controller;
 use App\Models\Municipio;
 use App\Models\Receituario;
+use App\Models\ReceituarioRequisicao;
 use App\Models\UsuarioExterno;
 use App\Services\LeitorComprovanteEnderecoService;
 use App\Services\ReceituarioCadastroService;
@@ -23,8 +24,9 @@ class ReceituarioController extends Controller
 
     public function index(Request $request)
     {
+        $usuarioId = auth('externo')->id();
         $query = Receituario::with(['municipio', 'estabelecimento' => fn ($q) => $q->withCount('processos')])
-            ->acessivelPor(auth('externo')->id());
+            ->acessivelPor($usuarioId);
 
         if ($request->filled('tipo') && in_array($request->tipo, self::TIPOS, true)) {
             $query->where('tipo', $request->tipo);
@@ -61,7 +63,58 @@ class ReceituarioController extends Controller
             'inativo' => (int) ($porStatus['inativo'] ?? 0),
         ];
 
-        return view('company.receituarios.index', compact('receituarios', 'estatisticas'));
+        $aba = $request->query('aba') === 'requisicoes' ? 'requisicoes' : 'cadastros';
+        $consultaRequisicoes = ReceituarioRequisicao::query()
+            ->whereHas('processo', function ($processo) use ($usuarioId) {
+                $processo->whereHas('estabelecimento', function ($estabelecimento) use ($usuarioId) {
+                    $estabelecimento->where('usuario_externo_id', $usuarioId)
+                        ->orWhereHas('usuariosVinculados', fn ($vinculo) => $vinculo->where('usuario_externo_id', $usuarioId));
+                })->whereHas('tipoProcesso', fn ($tipo) => $tipo
+                    ->where('usuario_externo_pode_visualizar', true)
+                    ->where('exclusivo_receituario', true));
+            });
+        $requisicoesTotal = (clone $consultaRequisicoes)->count();
+        $requisicoes = null;
+        $estatisticasRequisicoes = [];
+        $situacaoRequisicao = 'todas';
+
+        if ($aba === 'requisicoes') {
+            $porSituacao = (clone $consultaRequisicoes)
+                ->selectRaw('status, COUNT(*) as total')
+                ->groupBy('status')
+                ->pluck('total', 'status');
+
+            $estatisticasRequisicoes = [
+                'todas' => $requisicoesTotal,
+                'aguardando' => (int) ($porSituacao['enviada'] ?? 0) + (int) ($porSituacao['em_analise'] ?? 0),
+                'liberada' => (int) ($porSituacao['liberada'] ?? 0),
+                'indeferida' => (int) ($porSituacao['indeferida'] ?? 0),
+                'cancelada' => (int) ($porSituacao['cancelada'] ?? 0),
+            ];
+
+            $situacaoRequisicao = $request->query('situacao', 'todas');
+            if (!is_string($situacaoRequisicao) || !array_key_exists($situacaoRequisicao, $estatisticasRequisicoes)) {
+                $situacaoRequisicao = 'todas';
+            }
+
+            $consultaLista = clone $consultaRequisicoes;
+            if ($situacaoRequisicao === 'aguardando') {
+                $consultaLista->whereIn('status', ['enviada', 'em_analise']);
+            } elseif ($situacaoRequisicao !== 'todas') {
+                $consultaLista->where('status', $situacaoRequisicao);
+            }
+
+            $requisicoes = $consultaLista
+                ->with(['processo.estabelecimento.receituario', 'receituario'])
+                ->orderByDesc('created_at')
+                ->paginate(15)
+                ->withQueryString();
+        }
+
+        return view('company.receituarios.index', compact(
+            'receituarios', 'estatisticas', 'aba', 'requisicoes', 'requisicoesTotal',
+            'estatisticasRequisicoes', 'situacaoRequisicao'
+        ));
     }
 
     public function create(Request $request)
@@ -85,10 +138,29 @@ class ReceituarioController extends Controller
             );
         }
 
+        // Cadastro salvo como rascunho (ficha baixada para assinar): continua de onde parou
+        if ($rascunho = $this->rascunhoDoUsuario()) {
+            return redirect()->route('company.receituarios.continuar', $rascunho->id);
+        }
+
         return view('company.receituarios.create', compact('tipo', 'municipios', 'usuario'));
     }
 
     public function store(Request $request)
+    {
+        return $this->salvarCadastro($request, false);
+    }
+
+    /**
+     * Passo 4: ao baixar a ficha, o cadastro é salvo como rascunho (dados + carteira + comprovante),
+     * para o profissional assinar com calma e voltar depois só para anexar a ficha assinada.
+     */
+    public function salvarRascunho(Request $request)
+    {
+        return $this->salvarCadastro($request, true);
+    }
+
+    private function salvarCadastro(Request $request, bool $rascunho)
     {
         $usuario = auth('externo')->user();
 
@@ -109,7 +181,11 @@ class ReceituarioController extends Controller
         // Profissional já cadastrado (por outra pessoa ou pela Vigilância): não cria um segundo cadastro
         $cpfInformado = preg_replace('/\D/', '', (string) $usuario->cpf);
         if (strlen($cpfInformado) === 11 && ($existente = $this->cadastroExistente($cpfInformado))) {
-            return back()->withInput($request->except(['carteira_conselho', 'carteira_conselho_verso', 'comprovante_endereco']))
+            if ($rascunho) {
+                return response()->json(['message' => $this->mensagemCadastroExistente($existente)], 422);
+            }
+
+            return back()->withInput($request->except(['carteira_conselho', 'carteira_conselho_verso', 'comprovante_endereco', 'documento_assinado']))
                 ->withErrors(['cpf' => $this->mensagemCadastroExistente($existente)]);
         }
 
@@ -133,8 +209,13 @@ class ReceituarioController extends Controller
             $rules['numero_crm'] = ($request->tipo === 'talidomida' ? 'required' : 'nullable') . '|string|max:50';
             $rules['endereco'] = 'nullable|string|max:255';
             $rules['endereco_residencial'] = 'nullable|string|max:255';
-            $rules['cep'] = 'nullable|string|max:10';
+            $rules['cep'] = $request->tipo === 'medico'
+                ? 'required|string|max:9|regex:/^\d{5}-?\d{3}$/|not_in:00000-000,00000000'
+                : 'nullable|string|max:10';
             $rules['municipio_id'] = 'nullable|exists:municipios,id';
+            // Pelo menos um local de trabalho (passo 3)
+            $rules['locais_trabalho'] = 'required|array|min:1';
+            $rules['locais_trabalho.*.nome'] = 'nullable|string|max:255';
         }
 
         if (in_array($request->tipo, ['instituicao', 'secretaria'], true)) {
@@ -168,8 +249,8 @@ class ReceituarioController extends Controller
             $rules['declaracao_endereco_aceite'] = 'nullable|in:1';
         }
 
-        // Passo 4: ficha cadastral assinada (gov.br ou à mão, com carimbo)
-        if ($request->tipo === 'medico') {
+        // Passo 4: ficha cadastral assinada (gov.br ou à mão, com carimbo) — no rascunho ela ainda não existe
+        if ($request->tipo === 'medico' && !$rascunho) {
             $rules['documento_assinado'] = 'required|file|mimes:pdf,jpg,jpeg,png,webp|max:10240';
         }
 
@@ -178,6 +259,9 @@ class ReceituarioController extends Controller
             'nome.required' => 'Informe o nome do profissional.',
             'cpf.required' => 'Informe o CPF do profissional.',
             'telefone.required' => 'Informe o telefone do profissional.',
+            'cep.required' => 'Informe o CEP do endereço.',
+            'cep.regex' => 'Digite um CEP válido com 8 números.',
+            'cep.not_in' => 'Digite um CEP válido com 8 números.',
             'especialidade.required' => 'Selecione uma especialidade ou área de atuação.',
             'especialidade.in' => 'Selecione uma especialidade ou área de atuação da lista.',
             'numero_conselho_classe.required' => 'Informe o número do conselho de classe.',
@@ -193,7 +277,16 @@ class ReceituarioController extends Controller
             'documento_assinado.required' => 'Envie a ficha cadastral assinada (Passo 4).',
             'documento_assinado.mimes' => 'A ficha assinada deve ser PDF ou imagem (JPG, PNG ou WEBP).',
             'documento_assinado.max' => 'A ficha assinada deve ter no máximo 10 MB.',
+            'locais_trabalho.required' => 'Informe pelo menos um local de trabalho (Passo 3).',
+            'locais_trabalho.min' => 'Informe pelo menos um local de trabalho (Passo 3).',
         ]);
+
+        $locaisInformados = array_filter((array) $request->input('locais_trabalho', []), fn ($local) => trim((string) ($local['nome'] ?? '')) !== '');
+        if ($request->tipo === 'medico' && !$locaisInformados) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'locais_trabalho' => 'Informe pelo menos um local de trabalho (Passo 3).',
+            ]);
+        }
 
         $this->validarCarteira($request, $usuario->cpf, $usuario->nome);
 
@@ -206,7 +299,7 @@ class ReceituarioController extends Controller
             $validated['solicitante'], $validated['carteira_conselho'], $validated['carteira_conselho_verso'], $validated['carteira_leitura'],
             $validated['comprovante_endereco'], $validated['comprovante_leitura'], $validated['comprovante_titular'],
             $validated['comprovante_titular_nome'], $validated['declaracao_endereco_vinculo'], $validated['declaracao_endereco_aceite'],
-            $validated['documento_assinado']
+            $validated['documento_assinado'], $validated['locais_trabalho']
         );
 
         // Arquivos da carteira e do comprovante (disco privado) + o que foi lido deles, para conferência da vigilância
@@ -243,20 +336,111 @@ class ReceituarioController extends Controller
 
         $validated['usuario_externo_id'] = $usuario->id;
         $validated['solicitante_proprio'] = $solicitante ? $solicitante === 'proprio' : null;
-        // Cadastro do profissional: vai direto para a análise da Vigilância (carteira + comprovante).
+        // Rascunho: fica com a empresa até anexar a ficha assinada. Enviado: vai para a análise da Vigilância.
         // A requisição de receituário é feita depois, dentro do processo de receituário.
-        $validated['status'] = 'pendente';
+        $validated['status'] = $rascunho ? 'rascunho' : 'pendente';
 
-        $receituario = Receituario::create($validated);
+        // Já existe rascunho deste profissional: atualiza (e apaga os arquivos substituídos)
+        if ($receituario = $this->rascunhoDoUsuario()) {
+            $this->apagarArquivosSubstituidos($receituario, $validated);
+            $receituario->update($validated);
+        } else {
+            $receituario = Receituario::create($validated);
+        }
+
+        if ($rascunho) {
+            return response()->json([
+                'ok' => true,
+                'ficha_url' => route('company.receituarios.gerar-pdf', $receituario->id),
+                'continuar_url' => route('company.receituarios.continuar', $receituario->id),
+            ]);
+        }
 
         return redirect()
             ->route('company.receituarios.show', $receituario->id)
             ->with('success', 'Cadastro do profissional enviado! A Vigilância Sanitária vai analisar os documentos.');
     }
 
+    // ===================== Rascunho (passo 4 em andamento) =====================
+
+    /**
+     * Voltou depois de assinar: só falta anexar a ficha assinada e enviar
+     */
+    public function continuar($id)
+    {
+        $receituario = $this->doUsuario($id)->load('municipio');
+        if ($receituario->status !== 'rascunho') {
+            return redirect()->route('company.receituarios.show', $receituario->id);
+        }
+
+        return view('company.receituarios.continuar', compact('receituario'));
+    }
+
+    public function concluirRascunho(Request $request, $id)
+    {
+        $receituario = $this->doUsuario($id);
+        if ($receituario->status !== 'rascunho') {
+            return redirect()->route('company.receituarios.show', $receituario->id);
+        }
+
+        $request->validate([
+            'documento_assinado' => 'required|file|mimes:pdf,jpg,jpeg,png,webp|max:10240',
+        ], [
+            'documento_assinado.required' => 'Anexe a ficha cadastral assinada.',
+            'documento_assinado.mimes' => 'A ficha assinada deve ser PDF ou imagem (JPG, PNG ou WEBP).',
+            'documento_assinado.max' => 'A ficha assinada deve ter no máximo 10 MB.',
+        ]);
+
+        $dados = $this->arquivoAssinado($request->file('documento_assinado'));
+        $this->apagarArquivosSubstituidos($receituario, $dados);
+        $receituario->update($dados + ['status' => 'pendente']);
+
+        return redirect()->route('company.receituarios.show', $receituario->id)
+            ->with('success', 'Cadastro do profissional enviado! A Vigilância Sanitária vai analisar os documentos.');
+    }
+
+    public function descartarRascunho($id)
+    {
+        $receituario = $this->doUsuario($id);
+        if ($receituario->status === 'rascunho' && (int) $receituario->usuario_externo_id === (int) auth('externo')->id()) {
+            foreach (['carteira_conselho_path', 'carteira_conselho_verso_path', 'comprovante_endereco_path', 'documento_assinado_path'] as $campo) {
+                if ($receituario->{$campo}) {
+                    \Illuminate\Support\Facades\Storage::disk('local')->delete($receituario->{$campo});
+                }
+            }
+            $receituario->forceDelete();
+        }
+
+        return redirect()->route('company.receituarios.create', ['tipo' => 'medico'])
+            ->with('success', 'Rascunho descartado. Você pode começar o cadastro de novo.');
+    }
+
+    private function rascunhoDoUsuario(): ?Receituario
+    {
+        return Receituario::where('usuario_externo_id', auth('externo')->id())
+            ->where('status', 'rascunho')
+            ->latest('id')
+            ->first();
+    }
+
+    /**
+     * Ao trocar um arquivo do rascunho, apaga o anterior do disco
+     */
+    private function apagarArquivosSubstituidos(Receituario $receituario, array $novos): void
+    {
+        foreach (['carteira_conselho_path', 'carteira_conselho_verso_path', 'comprovante_endereco_path', 'documento_assinado_path'] as $campo) {
+            if (array_key_exists($campo, $novos) && $receituario->{$campo} && $receituario->{$campo} !== $novos[$campo]) {
+                \Illuminate\Support\Facades\Storage::disk('local')->delete($receituario->{$campo});
+            }
+        }
+    }
+
     public function show(Request $request, $id, ReceituarioCadastroService $cadastro)
     {
         $receituario = $this->doUsuario($id)->load(['municipio', 'estabelecimento.processos', 'analisadoPor:id,nome', 'usuarioExterno:id,nome,email,cpf', 'usuariosVinculados']);
+        if ($receituario->status === 'rascunho') {
+            return redirect()->route('company.receituarios.continuar', $receituario->id);
+        }
         $tiposProcesso = $receituario->isAprovado() ? $cadastro->tiposDisponiveis() : collect();
         $aba = in_array($request->query('aba'), ['documentos', 'processos', 'usuarios'], true) ? $request->query('aba') : 'geral';
 
@@ -493,45 +677,6 @@ class ReceituarioController extends Controller
             'comprovante_endereco_leitura' => $lido ?: null,
             'declaracao_endereco' => $declaracao,
         ];
-    }
-
-    /**
-     * Passo 4: ficha cadastral em PDF com os dados preenchidos nos passos 1 a 3 (ainda não salvos),
-     * para o profissional assinar (gov.br ou à mão, com carimbo) e anexar.
-     */
-    public function fichaPrevia(Request $request)
-    {
-        $usuario = auth('externo')->user();
-        $dados = $request->validate([
-            'especialidade' => 'nullable|string|max:255',
-            'telefone' => 'nullable|string|max:20',
-            'telefone2' => 'nullable|string|max:20',
-            'email' => 'nullable|string|max:255',
-            'numero_conselho_classe' => 'nullable|string|max:50',
-            'endereco' => 'nullable|string|max:255',
-            'cep' => 'nullable|string|max:10',
-            'municipio_id' => 'nullable|integer',
-            'locais_trabalho' => 'nullable|array',
-        ]);
-
-        $receituario = new Receituario([
-            'tipo' => 'medico',
-            'nome' => mb_strtoupper((string) $usuario->nome, 'UTF-8'),
-            'cpf' => $usuario->cpf_formatado ?? $usuario->cpf,
-            'especialidade' => $dados['especialidade'] ?? null,
-            'telefone' => $dados['telefone'] ?? null,
-            'telefone2' => $dados['telefone2'] ?? null,
-            'email' => $dados['email'] ?? null,
-            'numero_conselho_classe' => $dados['numero_conselho_classe'] ?? null,
-            'endereco' => $dados['endereco'] ?? null,
-            'cep' => $dados['cep'] ?? null,
-            'locais_trabalho' => array_values(array_filter((array) ($dados['locais_trabalho'] ?? []), fn ($l) => !empty($l['nome']))),
-        ]);
-        $receituario->setRelation('municipio', !empty($dados['municipio_id']) ? Municipio::find($dados['municipio_id']) : null);
-
-        return Pdf::loadView('receituarios.pdf.medico', ['receituario' => $receituario])
-            ->setPaper('a4', 'portrait')
-            ->stream('ficha-cadastral-receituario.pdf');
     }
 
     /**
@@ -828,7 +973,7 @@ class ReceituarioController extends Controller
 
     private function cadastroExistente(string $cpf): ?Receituario
     {
-        return Receituario::whereIn('tipo', ['medico', 'talidomida'])->where('cpf', $cpf)->first();
+        return Receituario::whereIn('tipo', ['medico', 'talidomida'])->where('cpf', $cpf)->where('status', '!=', 'rascunho')->first();
     }
 
     private function mensagemCadastroExistente(Receituario $existente): string

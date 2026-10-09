@@ -16,6 +16,8 @@
     $permitirComprovante = $permitirCarteira;
     $comprovanteObrigatorio = $tipo === 'medico';
     $rotaLerComprovante = route('company.receituarios.ler-comprovante');
+    // Cadastro pela empresa: pelo menos um local de trabalho (passo 3)
+    $locaisObrigatorios = $tipo === 'medico';
 @endphp
 
 @section('title', 'Cadastrar profissional')
@@ -256,6 +258,17 @@ function wizardReceituario() {
                 this.avisarCarteira(motivo, this.currentStep);
                 return false;
             }
+            if (this.currentStep === 1 && tipo === 'medico') {
+                const cep = this.campo('cep');
+                const digitosCep = (cep?.value || '').replace(/\D/g, '');
+                if (digitosCep.length !== 8 || digitosCep === '00000000') {
+                    cep?.setCustomValidity(digitosCep.length ? 'Digite um CEP válido com 8 números.' : 'Informe o CEP do endereço.');
+                    cep?.reportValidity();
+                    cep?.setCustomValidity('');
+                    cep?.focus();
+                    return false;
+                }
+            }
             if (this.currentStep === 0 && ['medico', 'talidomida'].includes(tipo)) {
                 const buscaEspecialidade = document.getElementById('busca-especialidade');
                 const especialidadeSelecionada = this.campo('especialidade')?.value || '';
@@ -265,6 +278,15 @@ function wizardReceituario() {
                     buscaEspecialidade.reportValidity();
                     buscaEspecialidade.setCustomValidity('');
                     buscaEspecialidade.focus();
+                    return false;
+                }
+            }
+            // Passo 3: pelo menos um local de trabalho
+            if (this.currentStep === 2 && tipo === 'medico') {
+                const temLocal = [...document.querySelectorAll('#receituarioForm [name^="locais_trabalho["][name$="[nome]"]')]
+                    .some(el => el.value.trim() !== '');
+                if (!temLocal) {
+                    alert('Informe pelo menos um local de trabalho: digite o CEP do local e clique em Buscar, ou use "preencher manualmente".');
                     return false;
                 }
             }

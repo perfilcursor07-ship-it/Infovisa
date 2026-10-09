@@ -197,6 +197,35 @@
                 </div>
             </div>
 
+            {{-- Módulos de acesso --}}
+            @php
+                $modulosMarcados = old('modulos', $usuarioExterno->modulos ?? array_keys(\App\Models\UsuarioExterno::MODULOS));
+                $descricaoModulos = [
+                    'processos' => 'Estabelecimentos, processos, documentos e alertas.',
+                    'receituario' => 'Cadastro de prescritor e requisições de receituário.',
+                ];
+            @endphp
+            <div>
+                <h2 class="text-lg font-semibold text-gray-900 mb-1 pb-2 border-b border-gray-200">
+                    Módulos de acesso
+                </h2>
+                <p class="mb-3 text-xs text-gray-500">O que o usuário vê na área da empresa. Quem está vinculado a um estabelecimento ou a um cadastro de receituário continua acessando o módulo correspondente.</p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    @foreach(\App\Models\UsuarioExterno::MODULOS as $chave => $rotulo)
+                    <label class="flex items-start gap-3 p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50/50 transition">
+                        <input type="checkbox" name="modulos[]" value="{{ $chave }}"
+                               {{ in_array($chave, (array) $modulosMarcados, true) ? 'checked' : '' }}
+                               class="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                        <span>
+                            <span class="block text-sm font-medium text-gray-900">{{ $rotulo }}</span>
+                            <span class="block text-xs text-gray-500">{{ $descricaoModulos[$chave] ?? '' }}</span>
+                        </span>
+                    </label>
+                    @endforeach
+                </div>
+                @error('modulos.*')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+            </div>
+
             {{-- Status --}}
             <div>
                 <h2 class="text-lg font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-200">

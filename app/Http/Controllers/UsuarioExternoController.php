@@ -182,7 +182,12 @@ class UsuarioExternoController extends Controller
             'vinculo_estabelecimento' => 'nullable|string',
             'password' => 'nullable|string|min:8|confirmed',
             'ativo' => 'boolean',
+            'modulos' => 'nullable|array',
+            'modulos.*' => 'string|in:' . implode(',', array_keys(UsuarioExterno::MODULOS)),
         ]);
+
+        // Nenhum marcado = sem módulos (lista vazia; nulo significaria acesso a tudo)
+        $validated['modulos'] = array_values(array_intersect(array_keys(UsuarioExterno::MODULOS), $request->input('modulos', [])));
 
         if ($request->filled('password')) {
             $validated['password'] = bcrypt($validated['password']);

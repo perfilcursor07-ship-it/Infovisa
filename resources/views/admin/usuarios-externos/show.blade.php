@@ -74,6 +74,22 @@
                             <span class="px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">Inativo</span>
                         @endif
                     </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-500 mb-1">Módulos de acesso</label>
+                        <div class="flex flex-wrap gap-1.5">
+                            @foreach(\App\Models\UsuarioExterno::MODULOS as $chave => $rotulo)
+                                @if($usuarioExterno->temModulo($chave))
+                                <span class="px-2 py-1 text-xs font-medium rounded-full {{ $chave === 'receituario' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800' }}"
+                                      @if(!in_array($chave, $usuarioExterno->modulos ?? array_keys(\App\Models\UsuarioExterno::MODULOS), true)) title="Liberado por vínculo" @endif>
+                                    {{ $rotulo }}
+                                </span>
+                                @endif
+                            @endforeach
+                            @if(!$usuarioExterno->temModulo('processos') && !$usuarioExterno->temModulo('receituario'))
+                                <span class="text-gray-500 text-sm">Nenhum</span>
+                            @endif
+                        </div>
+                    </div>
                 </div>
             </div>
 

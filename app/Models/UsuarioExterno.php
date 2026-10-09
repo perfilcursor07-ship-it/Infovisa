@@ -13,6 +13,15 @@ class UsuarioExterno extends Authenticatable
 {
     use HasFactory, Notifiable, SoftDeletes;
 
+    /** Módulos da área do usuário externo. */
+    public const MODULOS = [
+        'processos' => 'Licenciamento e processos',
+        'receituario' => 'Receituário',
+    ];
+
+    /** Cache por requisição de temModulo(). */
+    protected array $modulosAcessiveis = [];
+
     /**
      * The table associated with the model.
      */
@@ -27,6 +36,7 @@ class UsuarioExterno extends Authenticatable
         'email',
         'telefone',
         'vinculo_estabelecimento',
+        'modulos',
         'password',
         'aceite_termos_em',
         'ip_aceite_termos',
@@ -53,6 +63,7 @@ class UsuarioExterno extends Authenticatable
             'password' => 'hashed',
             'ativo' => 'boolean',
             'vinculo_estabelecimento' => VinculoEstabelecimento::class,
+            'modulos' => 'array',
         ];
     }
 
@@ -128,5 +139,45 @@ class UsuarioExterno extends Authenticatable
             ->withPivot(['tipo_vinculo', 'observacao', 'created_at'])
             ->withTimestamps();
     }
-}
 
+    /**
+     * Indica se o usuário acessa o módulo. Além do que foi escolhido no cadastro
+     * (ou liberado pela Vigilância), quem está vinculado a um estabelecimento ou a um
+     * cadastro de receituário acessa o módulo correspondente.
+     */
+    public function temModulo(string $modulo): bool
+    {
+        if (array_key_exists($modulo, $this->modulosAcessiveis)) {
+            return $this->modulosAcessiveis[$modulo];
+        }
+
+        // Sem registro (contas anteriores aos módulos): acesso a tudo
+        $acesso = in_array($modulo, $this->modulos ?? array_keys(self::MODULOS), true);
+
+        if (!$acesso && $modulo === 'processos') {
+            // O estabelecimento interno do receituário (oculto) não libera processos
+            $acesso = Estabelecimento::where('oculto_receituario', false)
+                ->where(fn ($q) => $q->where('usuario_externo_id', $this->id)
+                    ->orWhereHas('usuariosVinculados', fn ($v) => $v->where('usuario_externo_id', $this->id)))
+                ->exists();
+        }
+
+        if (!$acesso && $modulo === 'receituario') {
+            $acesso = Receituario::acessivelPor($this->id)->exists();
+        }
+
+        return $this->modulosAcessiveis[$modulo] = $acesso;
+    }
+
+    /**
+     * Página inicial conforme os módulos do usuário.
+     */
+    public function rotaInicial(): string
+    {
+        if ($this->temModulo('processos')) {
+            return 'company.dashboard';
+        }
+
+        return $this->temModulo('receituario') ? 'company.receituarios.index' : 'company.perfil.index';
+    }
+}

@@ -1,7 +1,7 @@
 @extends('layouts.company')
 
-@section('title', 'Profissionais cadastrados')
-@section('page-title', 'Receituário · Profissionais')
+@section('title', 'Receituários')
+@section('page-title', 'Receituário')
 
 @php
     // Tipos de cadastro (classes completas para o Tailwind detectar)
@@ -48,6 +48,7 @@
         ],
     ];
     $status = [
+        'rascunho' => ['rotulo' => 'Rascunho', 'badge' => 'bg-violet-50 text-violet-700', 'ponto' => 'bg-violet-500'],
         'aguardando_assinatura' => ['rotulo' => 'Cadastro em análise', 'badge' => 'bg-blue-50 text-blue-700', 'ponto' => 'bg-blue-500'],
         'pendente' => ['rotulo' => 'Cadastro em análise', 'badge' => 'bg-blue-50 text-blue-700', 'ponto' => 'bg-blue-500'],
         'ativo' => ['rotulo' => 'Cadastro aprovado', 'badge' => 'bg-green-50 text-green-700', 'ponto' => 'bg-green-500'],
@@ -79,47 +80,37 @@
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
             </div>
             <div>
-                <h1 class="text-lg font-bold text-slate-900 tracking-tight leading-tight">Profissionais cadastrados</h1>
-                <p class="text-xs text-slate-400">Cadastre o profissional; com o cadastro aprovado pela Vigilância, abra o processo de receituário.</p>
+                <h1 class="text-lg font-bold text-slate-900 tracking-tight leading-tight">Receituários</h1>
+                <p class="text-xs text-slate-500">Acompanhe os cadastros e as requisições de numeração enviadas à Vigilância.</p>
             </div>
         </div>
 
-        {{-- Nova solicitação --}}
-        <div class="relative" x-data="{ aberto: false }" @click.outside="aberto = false" @keydown.escape.window="aberto = false">
-            <button type="button" @click="aberto = !aberto"
-                    class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-sm shadow-blue-600/20">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M12 4v16m8-8H4"/></svg>
-                Cadastrar profissional
-                <svg class="w-3.5 h-3.5 transition-transform" :class="aberto && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-            </button>
-            <div x-show="aberto" x-cloak x-transition.origin.top.right
-                 class="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl ring-1 ring-slate-200 p-1.5 z-30">
-                @foreach($tipos as $codigo => $tipo)
-                    @if($codigo === 'medico')
-                    <a href="{{ route('company.receituarios.create', ['tipo' => $codigo]) }}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-50 transition">
-                    @else
-                    <div aria-disabled="true" title="Cadastro indisponível no momento" class="flex items-center gap-3 px-3 py-2.5 rounded-lg opacity-50 cursor-not-allowed">
-                    @endif
-                        <span class="w-9 h-9 rounded-lg {{ $tipo['chip'] }} flex items-center justify-center flex-shrink-0">
-                            <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="{{ $tipo['icone'] }}"/></svg>
-                        </span>
-                        <span class="min-w-0">
-                            <span class="block text-sm font-semibold text-slate-900">{{ $tipo['titulo'] }}</span>
-                            <span class="block text-[11px] text-slate-500">{{ $tipo['texto'] }}</span>
-                            @if($codigo !== 'medico')
-                                <span class="block text-[10px] font-semibold text-slate-500">Indisponível no momento</span>
-                            @endif
-                        </span>
-                    @if($codigo === 'medico')
-                    </a>
-                    @else
-                    </div>
-                    @endif
-                @endforeach
-            </div>
-        </div>
+        <a href="{{ route('company.receituarios.create', ['tipo' => 'medico']) }}"
+           class="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-sm shadow-blue-600/20">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M12 4v16m8-8H4"/></svg>
+            Cadastrar profissional
+        </a>
     </div>
 
+    {{-- Navegação principal --}}
+    <nav class="flex items-center gap-1 border-b border-slate-200" aria-label="Seções de receituários">
+        <a href="{{ route('company.receituarios.index', ['aba' => 'cadastros']) }}"
+           @if($aba === 'cadastros') aria-current="page" @endif
+           class="inline-flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition {{ $aba === 'cadastros' ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300' }}">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M16 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2m16 0v-2a4 4 0 00-3-3.87M14 3.13a4 4 0 010 7.75M14 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+            Cadastros
+            <span class="px-1.5 py-0.5 rounded-md text-[11px] tabular-nums {{ $aba === 'cadastros' ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-500' }}">{{ $estatisticas['total'] }}</span>
+        </a>
+        <a href="{{ route('company.receituarios.index', ['aba' => 'requisicoes']) }}"
+           @if($aba === 'requisicoes') aria-current="page" @endif
+           class="inline-flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition {{ $aba === 'requisicoes' ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300' }}">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 12h6m-6 4h6"/></svg>
+            Requisições
+            <span class="px-1.5 py-0.5 rounded-md text-[11px] tabular-nums {{ $aba === 'requisicoes' ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-500' }}">{{ $requisicoesTotal }}</span>
+        </a>
+    </nav>
+
+    @if($aba === 'cadastros')
     {{-- Estatísticas (clique para filtrar) --}}
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-2">
         <a href="{{ $urlStatus(null) }}"
@@ -162,47 +153,6 @@
                 <p class="text-[11px] font-medium text-slate-500 mt-0.5">Correção solicitada</p>
             </div>
         </a>
-    </div>
-
-    {{-- Tipos de solicitação --}}
-    <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4">
-        <div class="flex items-center justify-between mb-3">
-            <div>
-                <h2 class="text-sm font-semibold text-slate-900">Cadastrar profissional</h2>
-                <p class="text-[11px] text-slate-500">Escolha o tipo de cadastro. A Vigilância analisa os documentos e, aprovado, você abre o processo de receituário.</p>
-            </div>
-        </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-            @foreach($tipos as $codigo => $tipo)
-                @if($codigo === 'medico')
-                <a href="{{ route('company.receituarios.create', ['tipo' => $codigo]) }}"
-                   class="group flex items-start gap-3 rounded-xl border border-slate-200 p-3.5 hover:shadow-md transition-all {{ $tipo['hover'] }}">
-                @else
-                <div aria-disabled="true" title="Cadastro indisponível no momento"
-                     class="flex items-start gap-3 rounded-xl border border-slate-200 p-3.5 opacity-50 grayscale cursor-not-allowed">
-                @endif
-                    <span class="w-10 h-10 rounded-xl {{ $tipo['chip'] }} flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="{{ $tipo['icone'] }}"/></svg>
-                    </span>
-                    <span class="min-w-0 flex-1">
-                        <span class="block text-[13px] font-semibold text-slate-900 leading-snug">{{ $tipo['titulo'] }}</span>
-                        <span class="block text-[11px] text-slate-500 mt-0.5">{{ $tipo['texto'] }}</span>
-                        @if($codigo === 'medico')
-                        <span class="inline-flex items-center gap-1 mt-2 text-[11px] font-semibold {{ $tipo['link'] }}">
-                            Cadastrar
-                            <svg class="w-3 h-3 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
-                        </span>
-                        @else
-                        <span class="inline-flex mt-2 text-[11px] font-semibold text-slate-500">Indisponível no momento</span>
-                        @endif
-                    </span>
-                @if($codigo === 'medico')
-                </a>
-                @else
-                </div>
-                @endif
-            @endforeach
-        </div>
     </div>
 
     {{-- Filtros --}}
@@ -275,6 +225,8 @@
                                 </span>
                                 @if($receituario->status === 'rejeitado')
                                     <a href="{{ route('company.receituarios.show', $receituario->id) }}" class="block mt-1 text-[11px] font-semibold text-red-600 hover:underline">Ver o que corrigir →</a>
+                                @elseif($receituario->status === 'rascunho')
+                                    <a href="{{ route('company.receituarios.continuar', $receituario->id) }}" class="block mt-1 text-[11px] font-semibold text-violet-700 hover:underline">Continuar cadastro →</a>
                                 @endif
                             </td>
                             <td class="px-4 py-3 whitespace-nowrap text-center">
@@ -319,5 +271,103 @@
         </div>
         @endif
     </div>
+    @else
+    @php
+        $filtrosRequisicao = [
+            'todas' => 'Todas',
+            'aguardando' => 'Aguardando análise',
+            'liberada' => 'Liberadas',
+            'indeferida' => 'Indeferidas',
+            'cancelada' => 'Canceladas',
+        ];
+    @endphp
+    <section class="space-y-3">
+        <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
+            <div>
+                <h2 class="text-base font-semibold text-slate-900">Requisições de numeração</h2>
+                <p class="mt-0.5 text-xs text-slate-500">Acompanhe os pedidos enviados e acesse as liberações da Vigilância.</p>
+            </div>
+            <span class="text-xs text-slate-500">{{ $requisicoesTotal }} {{ $requisicoesTotal === 1 ? 'requisição' : 'requisições' }}</span>
+        </div>
+
+        <nav class="flex flex-wrap gap-2" aria-label="Filtrar requisições por situação">
+            @foreach($filtrosRequisicao as $filtro => $rotulo)
+                @php $ativo = $situacaoRequisicao === $filtro; @endphp
+                <a href="{{ route('company.receituarios.index', ['aba' => 'requisicoes', 'situacao' => $filtro]) }}"
+                   @if($ativo) aria-current="page" @endif
+                   class="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition {{ $ativo ? 'border-blue-300 bg-blue-50 text-blue-800' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50' }}">
+                    {{ $rotulo }}
+                    <span class="tabular-nums {{ $ativo ? 'text-blue-700' : 'text-slate-400' }}">{{ $estatisticasRequisicoes[$filtro] }}</span>
+                </a>
+            @endforeach
+        </nav>
+
+        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            @if($requisicoes->isNotEmpty())
+            <ul class="divide-y divide-slate-100">
+                @foreach($requisicoes as $requisicao)
+                    @php
+                        $situacao = $requisicao->situacao;
+                        $cadastroRequisicao = $requisicao->receituario ?? $requisicao->processo?->estabelecimento?->receituario;
+                    @endphp
+                    <li>
+                        <a href="{{ route('company.processos.receituario-requisicoes.show', [$requisicao->processo_id, $requisicao->id]) }}"
+                           class="group grid grid-cols-1 gap-3 px-4 py-4 hover:bg-slate-50 transition sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-5">
+                            <div class="min-w-0 space-y-2">
+                                <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                                    <span class="text-sm font-bold text-slate-900 group-hover:text-blue-700">Nº {{ $requisicao->numero }}</span>
+                                    <span class="text-[11px] text-slate-500">{{ $requisicao->created_at->format('d/m/Y H:i') }}</span>
+                                    @if($requisicao->processo?->numero_processo)
+                                        <span class="text-[11px] text-slate-400">Processo {{ $requisicao->processo->numero_processo }}</span>
+                                    @endif
+                                </div>
+                                <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                                    <span class="text-sm font-medium text-slate-800">{{ $cadastroRequisicao?->identificador ?? 'Profissional' }}</span>
+                                    @if($cadastroRequisicao?->cpf_formatado)
+                                        <span class="text-xs tabular-nums text-slate-500">{{ $cadastroRequisicao->cpf_formatado }}</span>
+                                    @endif
+                                </div>
+                                <div class="flex flex-wrap gap-1.5">
+                                    @foreach($requisicao->resumoQuantidades() as $modalidade)
+                                        @foreach($modalidade['itens'] as $item)
+                                            <span class="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-[11px] text-slate-600">
+                                                {{ $modalidade['rotulo'] }} <strong class="text-slate-800">{{ $item['tipo'] }}</strong> × {{ $item['quantidade'] }}
+                                            </span>
+                                        @endforeach
+                                    @endforeach
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between gap-3 sm:justify-end">
+                                <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset {{ $situacao['classe'] }}">
+                                    <span class="h-1.5 w-1.5 rounded-full {{ $situacao['dot'] }}"></span>
+                                    {{ $situacao['label'] }}
+                                </span>
+                                <span class="inline-flex items-center gap-1 text-xs font-semibold text-blue-700">
+                                    Ver detalhes
+                                    <svg class="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                                </span>
+                            </div>
+                        </a>
+                    </li>
+                @endforeach
+            </ul>
+            @if($requisicoes->hasPages())
+                <div class="border-t border-slate-100 px-4 py-3">{{ $requisicoes->links() }}</div>
+            @endif
+            @else
+            <div class="px-6 py-12 text-center">
+                <div class="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-slate-400">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                </div>
+                <p class="text-sm font-semibold text-slate-800">{{ $requisicoesTotal === 0 ? 'Nenhuma requisição enviada' : 'Nenhuma requisição nesta situação' }}</p>
+                <p class="mt-1 text-xs text-slate-500">{{ $requisicoesTotal === 0 ? 'Quando você enviar um pedido de numeração, poderá acompanhá-lo por aqui.' : 'Escolha outra situação para consultar seus pedidos.' }}</p>
+                @if($situacaoRequisicao !== 'todas')
+                    <a href="{{ route('company.receituarios.index', ['aba' => 'requisicoes']) }}" class="mt-3 inline-flex text-xs font-semibold text-blue-700 hover:underline">Ver todas as requisições</a>
+                @endif
+            </div>
+            @endif
+        </div>
+    </section>
+    @endif
 </div>
 @endsection

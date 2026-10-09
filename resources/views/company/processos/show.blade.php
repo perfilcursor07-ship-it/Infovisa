@@ -109,8 +109,8 @@
             $requisicoesEmAnalise = $requisicoesReceituario->whereIn('status', ['enviada', 'em_analise'])->count();
             $proximoPasso = match (true) {
                 !$receituarioAprovado => ['tom' => 'amber', 'titulo' => 'Cadastro de receituário em análise', 'texto' => 'Após a aprovação do cadastro você poderá solicitar notificações de receita.', 'acao' => null],
-                $requisicoesEmAnalise > 0 => ['tom' => 'amber', 'titulo' => $requisicoesEmAnalise . ' requisição(ões) aguardando a Vigilância', 'texto' => 'Acompanhe a liberação abaixo. Você pode fazer novos pedidos quando precisar.', 'acao' => 'requisicao'],
-                default => ['tom' => 'blue', 'titulo' => 'Solicite notificações de receita', 'texto' => 'Faça uma requisição informando os tipos e quantidades de blocos.', 'acao' => 'requisicao'],
+                $requisicoesEmAnalise > 0 => ['tom' => 'amber', 'titulo' => 'Requisição aguardando a Vigilância', 'texto' => 'Acompanhe a liberação abaixo. Uma nova requisição só pode ser feita depois que esta for analisada.', 'acao' => 'requisicao'],
+                default => ['tom' => 'blue', 'titulo' => 'Solicite numeração de notificações de receita', 'texto' => 'Faça uma requisição informando quantas numerações precisa de cada tipo (física e/ou eletrônica).', 'acao' => 'requisicao'],
             };
         } elseif ($totalObrigatorios > 0 && $faltam > 0) {
             $proximoPasso = ['tom' => 'blue', 'titulo' => 'Envie ' . $faltam . ' documento(s) obrigatório(s)', 'texto' => 'O processo segue para análise após o envio de todos.', 'acao' => 'upload'];
@@ -137,7 +137,13 @@
     <div class="bg-white rounded-xl border border-slate-200 shadow-sm">
         <div class="px-4 py-3 flex flex-col lg:flex-row lg:items-center gap-3 justify-between">
             <div class="flex items-start gap-3 min-w-0">
-                <a href="{{ route('company.processos.index') }}" title="Voltar para meus processos"
+                @php
+                    $voltarReceituario = $processo->estabelecimento->oculto_receituario && $processo->estabelecimento->receituario;
+                @endphp
+                <a href="{{ $voltarReceituario
+                        ? route('company.receituarios.show', ['id' => $processo->estabelecimento->receituario->id, 'aba' => 'processos'])
+                        : route('company.processos.index') }}"
+                   title="{{ $voltarReceituario ? 'Voltar para o cadastro de receituário' : 'Voltar para meus processos' }}"
                    class="mt-0.5 w-8 h-8 flex-shrink-0 inline-flex items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
@@ -1099,7 +1105,7 @@
                         </svg>
                         Protocolo
                     </a>
-                    @if(!$processoArquivado && ($isProcessoReceituario ?? false) && $receituarioAprovado)
+                    @if(!$processoArquivado && ($isProcessoReceituario ?? false) && $receituarioAprovado && !($requisicaoEmAndamento ?? null))
                     <a href="{{ route('company.processos.receituario-requisicoes.create', $processo->id) }}"
                        class="group flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-slate-700 rounded-lg hover:bg-slate-50 transition-colors">
                         <svg class="w-[18px] h-[18px] text-slate-400 group-hover:text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">

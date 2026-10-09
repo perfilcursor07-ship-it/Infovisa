@@ -187,6 +187,39 @@ class ReceituarioCadastroService
     }
 
     /**
+     * Cadastro aprovado: abre sozinho o processo de receituário (a empresa não precisa abrir manualmente).
+     * Não abre outro se o profissional já tem processo de receituário em andamento, nem se não há tipo configurado.
+     */
+    public function abrirProcessoAutomatico(Receituario $receituario): ?Processo
+    {
+        $tipos = TipoProcesso::query()
+            ->where('ativo', true)
+            ->where('exclusivo_receituario', true)
+            ->orderByDesc('usuario_externo_pode_abrir')
+            ->orderBy('ordem')
+            ->orderBy('nome')
+            ->get();
+        if ($tipos->isEmpty()) {
+            return null;
+        }
+
+        $estabelecimento = $this->garantirEstabelecimento($receituario);
+        $emAndamento = Processo::where('estabelecimento_id', $estabelecimento->id)
+            ->whereIn('tipo', $tipos->pluck('codigo'))
+            ->whereNotIn('status', ['arquivado', 'concluido', 'indeferido'])
+            ->exists();
+        if ($emAndamento) {
+            return null;
+        }
+
+        $tipo = $tipos->first(fn (TipoProcesso $t) => $this->bloqueioAbertura($receituario, $t) === null);
+
+        return $tipo
+            ? $this->abrirProcesso($receituario, $tipo, $receituario->usuario_externo_id, 'Aberto automaticamente na aprovação do cadastro do profissional.')
+            : null;
+    }
+
+    /**
      * Motivo para não poder abrir o tipo agora (null = pode abrir). Mesmas regras de único/anual.
      */
     public function bloqueioAbertura(Receituario $receituario, TipoProcesso $tipo): ?string

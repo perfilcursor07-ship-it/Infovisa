@@ -197,6 +197,7 @@ class Receituario extends Model
      * Situações do cadastro: rótulo e cores (badge)
      */
     public const SITUACOES = [
+        'rascunho' => ['label' => 'Rascunho · falta anexar a ficha assinada', 'classe' => 'bg-violet-50 text-violet-800 ring-violet-200'],
         'aguardando_assinatura' => ['label' => 'Aguardando documento assinado', 'classe' => 'bg-amber-50 text-amber-800 ring-amber-200'],
         'pendente' => ['label' => 'Cadastro em análise', 'classe' => 'bg-blue-50 text-blue-800 ring-blue-200'],
         'ativo' => ['label' => 'Cadastro aprovado', 'classe' => 'bg-emerald-50 text-emerald-800 ring-emerald-200'],
@@ -321,6 +322,23 @@ class Receituario extends Model
         $analises[$documento] = ['status' => 'pendente', 'historico' => $historico];
         $this->analise_documentos = $analises;
         $this->recalcularStatus($usuarioId);
+    }
+
+    /**
+     * Reinicia a análise do cadastro (administrador): todos os documentos voltam para pendente e o cadastro
+     * volta para "em análise". A empresa não reenvia nada; os históricos e os processos já abertos continuam.
+     */
+    public function reiniciarAnalise(): void
+    {
+        $analises = $this->analise_documentos ?? [];
+        foreach ($this->documentosDaAnalise() as $documento) {
+            $analises[$documento] = ['status' => 'pendente', 'historico' => $analises[$documento]['historico'] ?? []];
+        }
+        $this->analise_documentos = $analises;
+        $this->analisado_por = null;
+        $this->analisado_em = null;
+        $this->motivo_rejeicao = null;
+        $this->recalcularStatus(null);
     }
 
     /**

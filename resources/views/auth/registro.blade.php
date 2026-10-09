@@ -27,9 +27,9 @@
         <div class="bg-white rounded-3xl shadow-xl shadow-slate-900/5 ring-1 ring-slate-200/80 p-6 sm:p-9">
             {{-- Cabeçalho --}}
             <div class="mb-6">
-                <img src="{{ asset('img/logo.png') }}" alt="InfoVISA" class="h-11 w-auto mb-6">
+                <img src="{{ asset('img/logo.png') }}" alt="InfoVISA" class="mx-auto mb-4 block h-8 w-auto">
                 <h1 class="text-2xl font-bold text-slate-900 tracking-tight mb-1">Criar conta</h1>
-                <p class="text-slate-500 text-sm">Cadastro de usuário externo (empresas, responsáveis e contadores)</p>
+                <p class="text-slate-500 text-sm">Cadastro de usuário externo (empresas, responsáveis, contadores e profissionais prescritores)</p>
             </div>
 
             {{-- Alertas --}}
@@ -55,7 +55,7 @@
             @endif
 
             {{-- ETAPA 1: CPF --}}
-            <section>
+            <section x-show="etapaAtual === 1" x-cloak x-transition>
                 <div class="flex items-center justify-between mb-1.5">
                     <label for="cpf" class="block text-xs font-semibold text-slate-600 uppercase tracking-wider">CPF <span class="text-red-500">*</span></label>
                     <button type="button" x-show="cpfStatus === 'valido'" x-cloak @click="alterarCpf()" class="text-xs font-medium text-blue-600 hover:text-blue-700">Alterar CPF</button>
@@ -110,7 +110,7 @@
                 </div>
             </section>
 
-            {{-- ETAPA 2 e 3: Dados + Termos --}}
+            {{-- ETAPAS 2 a 4: Uso + Dados + Termos --}}
             <form action="{{ route('registro.submit') }}" method="POST" x-ref="form"
                   x-show="cpfStatus === 'valido'" x-cloak
                   x-transition:enter="transition ease-out duration-300"
@@ -121,7 +121,66 @@
                 @csrf
                 <input type="hidden" name="cpf" :value="cpf">
 
+                <div x-show="etapaAtual > 1" x-cloak class="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-xs">
+                    <span class="text-slate-600">CPF validado: <strong class="tabular-nums text-slate-800" x-text="cpf"></strong></span>
+                    <button type="button" @click="alterarCpf()" class="font-semibold text-blue-700 hover:underline">Alterar</button>
+                </div>
+
+                {{-- Como vai usar --}}
+                <div x-show="etapaAtual === 2" x-cloak x-transition class="space-y-4">
+                <fieldset>
+                    <legend class="text-sm font-semibold text-slate-900">Como você vai usar o InfoVISA? <span class="text-red-500">*</span></legend>
+                    <p class="text-xs text-slate-500 mt-0.5 mb-3">Marque uma ou as duas opções. Se precisar de outra depois, a Vigilância Sanitária pode liberar.</p>
+                    <template x-for="m in modulos" :key="m"><input type="hidden" name="modulos[]" :value="m"></template>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <button type="button" x-ref="moduloProcessos" @click="alternarModulo('processos')" :aria-pressed="modulos.includes('processos')"
+                                class="relative flex items-center gap-3 text-left rounded-lg border p-3 pr-10 transition focus:outline-none focus:ring-4 focus:ring-blue-500/15"
+                                :class="modulos.includes('processos') ? 'border-blue-500 bg-blue-50/60 ring-1 ring-blue-500' : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'">
+                            <span class="absolute top-2.5 right-2.5 w-4 h-4 rounded border flex items-center justify-center transition"
+                                  :class="modulos.includes('processos') ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 bg-white text-transparent'">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                            </span>
+                            <span class="w-8 h-8 rounded-md bg-blue-100 text-blue-600 flex items-center justify-center flex-shrink-0">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+                            </span>
+                            <span class="min-w-0">
+                                <span class="block text-[13px] font-semibold text-slate-900 leading-tight">Licenciamento e processos</span>
+                                <span class="block text-[11px] text-slate-500 mt-0.5 leading-snug">Cadastrar estabelecimentos, abrir processos e enviar documentos à Vigilância Sanitária.</span>
+                            </span>
+                        </button>
+
+                        <button type="button" @click="alternarModulo('receituario')" :aria-pressed="modulos.includes('receituario')"
+                                class="relative flex items-center gap-3 text-left rounded-lg border p-3 pr-10 transition focus:outline-none focus:ring-4 focus:ring-emerald-500/15"
+                                :class="modulos.includes('receituario') ? 'border-emerald-500 bg-emerald-50/60 ring-1 ring-emerald-500' : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'">
+                            <span class="absolute top-2.5 right-2.5 w-4 h-4 rounded border flex items-center justify-center transition"
+                                  :class="modulos.includes('receituario') ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-slate-300 bg-white text-transparent'">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                            </span>
+                            <span class="w-8 h-8 rounded-md bg-emerald-100 text-emerald-600 flex items-center justify-center flex-shrink-0">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+                            </span>
+                            <span class="min-w-0">
+                                <span class="block text-[13px] font-semibold text-slate-900 leading-tight">Receituário</span>
+                                <span class="block text-[11px] text-slate-500 mt-0.5 leading-snug">Cadastro de prescritor (médico, dentista, veterinário…) para requisição de notificações de receita.</span>
+                            </span>
+                        </button>
+                    </div>
+                    @error('modulos')<p class="mt-2 text-xs text-red-600">{{ $message }}</p>@enderror
+                    @error('modulos.*')<p class="mt-2 text-xs text-red-600">{{ $message }}</p>@enderror
+                </fieldset>
+
+                <p x-show="erroEtapa" x-cloak x-text="erroEtapa" class="text-xs font-medium text-red-600" role="alert"></p>
+                <div class="flex justify-end">
+                    <button type="button" @click="avancarEtapa()" class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/20">
+                        Continuar
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                    </button>
+                </div>
+                </div>
+
                 {{-- Dados pessoais --}}
+                <div x-show="etapaAtual === 3" x-cloak x-transition class="space-y-6">
                 <fieldset class="space-y-4">
                     <legend class="text-sm font-semibold text-slate-900 mb-3">Dados pessoais</legend>
 
@@ -228,12 +287,26 @@
                         </ul>
                     </div>
                 </fieldset>
+                <p x-show="erroEtapa" x-cloak x-text="erroEtapa" class="text-xs font-medium text-red-600" role="alert"></p>
+                <div class="flex items-center justify-between gap-3">
+                    <button type="button" @click="voltarEtapa()" class="px-4 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-900">Voltar</button>
+                    <button type="button" @click="avancarEtapa()" class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/20">
+                        Continuar
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                    </button>
+                </div>
+                </div>
 
                 {{-- Termos --}}
+                <div x-show="etapaAtual === 4" x-cloak x-transition class="space-y-5">
+                <div>
+                    <h2 class="text-sm font-semibold text-slate-900">Aceite dos termos</h2>
+                    <p class="mt-0.5 text-xs text-slate-500">Leia os termos para concluir a criação da sua conta.</p>
+                </div>
                 <div class="pt-6 border-t border-slate-100">
                     <div class="flex items-start gap-3 rounded-xl p-3 -m-3 transition" :class="termosAceitos ? 'bg-emerald-50/60' : ''">
                         <input type="hidden" name="aceite_termos" :value="termosAceitos ? '1' : '0'">
-                        <input id="aceite_termos" type="checkbox"
+                        <input id="aceite_termos" x-ref="termos" type="checkbox"
                                :checked="termosAceitos"
                                @click.prevent="termosLidos ? (termosAceitos = !termosAceitos) : (modalAberto = true)"
                                class="mt-0.5 w-5 h-5 text-blue-600 border-slate-300 rounded focus:ring-blue-500 cursor-pointer">
@@ -248,14 +321,18 @@
                 </div>
 
                 {{-- Enviar --}}
-                <div>
+                <div class="flex items-center justify-between gap-3">
+                    <button type="button" @click="voltarEtapa()" class="px-4 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-900">Voltar</button>
                     <button type="submit" :disabled="!podeEnviar || enviando"
-                            class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-3 rounded-xl font-semibold hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg shadow-blue-600/25 hover:shadow-xl hover:shadow-blue-600/30 flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:active:scale-100">
-                        <svg x-show="enviando" x-cloak class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                            class="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none">
+                        <svg x-show="enviando" x-cloak class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
                         <span x-text="enviando ? 'Criando conta...' : 'Criar minha conta'"></span>
-                        <svg x-show="!enviando" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
+                        <svg x-show="!enviando" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
                     </button>
+                </div>
+                <div>
                     <p x-show="!podeEnviar" class="mt-2 text-center text-xs text-slate-500" x-text="pendencia"></p>
+                </div>
                 </div>
 
                 {{-- Modal de Termos e Condições --}}
@@ -366,7 +443,9 @@ const termosEmpresa = @js(\App\Support\NomePessoaHelper::TERMOS_EMPRESA);
 
 function registroForm() {
     return {
-        etapas: ['Validar CPF', 'Seus dados', 'Aceite dos termos'],
+        etapas: ['Validar CPF', 'Como vai usar', 'Seus dados', 'Aceite dos termos'],
+        etapaCadastro: @js($errors->has('aceite_termos') ? 4 : (($errors->has('nome') || $errors->has('email') || $errors->has('telefone') || $errors->has('password')) ? 3 : 2)),
+        modulos: @js(array_values((array) old('modulos', ($moduloSugerido ?? null) ? [$moduloSugerido] : []))),
         cpf: @js(old('cpf', $cpfFornecido ?? '')),
         nome: @js(old('nome', '')),
         email: @js(old('email', '')),
@@ -379,6 +458,7 @@ function registroForm() {
         nomeAutoPreenchido: false,
         consultando: false,
         enviando: false,
+        erroEtapa: '',
         modalAberto: false,
         termosLidos: @js((bool) old('aceite_termos')),
         termosAceitos: @js((bool) old('aceite_termos')),
@@ -432,11 +512,11 @@ function registroForm() {
         },
         get etapaAtual() {
             if (this.cpfStatus !== 'valido') return 1;
-            if (!this.dadosValidos) return 2;
-            return this.termosAceitos ? 4 : 3;
+            return this.etapaCadastro;
         },
-        get podeEnviar() { return this.cpfStatus === 'valido' && this.dadosValidos && this.termosAceitos; },
+        get podeEnviar() { return this.cpfStatus === 'valido' && this.modulos.length > 0 && this.dadosValidos && this.termosAceitos; },
         get pendencia() {
+            if (!this.modulos.length) return 'Informe como você vai usar o InfoVISA.';
             if (this.termoEmpresaNome) return 'Informe o seu nome, não o nome da empresa.';
             if (!this.nomeValido) return 'Informe seu nome completo.';
             if (!this.emailValido) return 'Informe um e-mail válido.';
@@ -445,6 +525,54 @@ function registroForm() {
             if (!this.senhasConferem) return 'Confirme a senha.';
             if (!this.termosAceitos) return 'Aceite os termos de uso para continuar.';
             return '';
+        },
+
+        alternarModulo(modulo) {
+            this.erroEtapa = '';
+            this.modulos = this.modulos.includes(modulo)
+                ? this.modulos.filter(m => m !== modulo)
+                : [...this.modulos, modulo];
+        },
+
+        avancarEtapa() {
+            this.erroEtapa = '';
+
+            if (this.etapaAtual === 2) {
+                if (!this.modulos.length) {
+                    this.erroEtapa = 'Selecione pelo menos uma opção para continuar.';
+                    return;
+                }
+
+                this.etapaCadastro = 3;
+                this.$nextTick(() => {
+                    const alvo = this.nomeValido ? document.getElementById('email') : this.$refs.nome;
+                    alvo?.focus();
+                });
+            } else if (this.etapaAtual === 3) {
+                this.tocado = { nome: true, email: true, telefone: true };
+                if (!this.dadosValidos) {
+                    this.erroEtapa = this.pendencia;
+                    const alvo = !this.nomeValido ? this.$refs.nome
+                        : !this.emailValido ? document.getElementById('email')
+                        : !this.telefoneValido ? document.getElementById('telefone')
+                        : !this.senhaValida ? document.getElementById('password')
+                        : document.getElementById('password_confirmation');
+                    this.$nextTick(() => alvo?.focus());
+                    return;
+                }
+
+                this.etapaCadastro = 4;
+                this.$nextTick(() => this.$refs.termos?.focus());
+            }
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        },
+
+        voltarEtapa() {
+            if (this.etapaCadastro <= 2) return;
+            this.etapaCadastro--;
+            this.erroEtapa = '';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         },
 
         formatCpf() {
@@ -479,6 +607,8 @@ function registroForm() {
         alterarCpf() {
             this.cpfStatus = 'aguardando';
             this.mensagemCpf = '';
+            this.etapaCadastro = 2;
+            this.erroEtapa = '';
             if (this.nomeAutoPreenchido) {
                 this.nome = '';
                 this.nomeAutoPreenchido = false;
@@ -536,6 +666,7 @@ function registroForm() {
                 }
 
                 this.cpfStatus = 'valido';
+                this.erroEtapa = '';
                 if (data.encontrado && data.nome && !this.nome) {
                     this.nome = data.nome;
                     this.nomeAutoPreenchido = true;
@@ -543,27 +674,35 @@ function registroForm() {
                 } else {
                     this.mensagemCpf = 'CPF válido. Complete seus dados abaixo.';
                 }
-                this.focarProximoCampo();
+                this.focarEtapaAtual();
             } catch (error) {
                 if (id !== this.consultaId) return;
                 console.error('Erro ao consultar CPF:', error);
                 // Falha de rede: libera o preenchimento manual; o servidor valida tudo no envio
                 this.cpfStatus = 'valido';
                 this.mensagemCpf = 'Não foi possível verificar agora. Preencha os dados manualmente.';
-                this.focarProximoCampo();
+                this.focarEtapaAtual();
             } finally {
                 if (id === this.consultaId) this.consultando = false;
             }
         },
 
-        focarProximoCampo() {
+        focarEtapaAtual() {
             this.$nextTick(() => {
-                const alvo = this.nome ? document.getElementById('email') : this.$refs.nome;
-                if (alvo && !alvo.value) alvo.focus();
+                if (this.etapaCadastro === 2) this.$refs.moduloProcessos?.focus();
+                else if (this.etapaCadastro === 3) {
+                    const alvo = this.nomeValido ? document.getElementById('email') : this.$refs.nome;
+                    alvo?.focus();
+                } else this.$refs.termos?.focus();
             });
         },
 
         onSubmit(event) {
+            if (this.etapaAtual !== 4) {
+                event.preventDefault();
+                this.avancarEtapa();
+                return;
+            }
             if (!this.podeEnviar || this.enviando) {
                 event.preventDefault();
                 this.tocado = { nome: true, email: true, telefone: true };

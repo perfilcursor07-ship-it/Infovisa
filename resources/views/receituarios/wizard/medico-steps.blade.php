@@ -33,7 +33,7 @@
                                 <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-slate-100 text-slate-500">Opcional</span>
                             @endif
                         </div>
-                        <p class="text-xs text-slate-500 mt-0.5">Envie a <strong class="text-slate-700">frente</strong> e o <strong class="text-slate-700">verso</strong> (foto ou PDF). Um PDF com as duas páginas também serve. A gente lê a carteira e preenche os dados para você.</p>
+                        <p class="text-xs text-slate-500 mt-0.5">Envie a carteira com a <strong class="text-slate-700">frente e o verso</strong>: um PDF com as duas páginas, uma foto com os dois lados ou duas fotos. A gente identifica os lados sozinho, lê a carteira e preenche os dados para você.</p>
                     </div>
                 </div>
                 <button type="button" x-show="completa && !lendo" x-cloak @click="lerTudo()"
@@ -43,8 +43,26 @@
                 </button>
             </div>
 
-            {{-- Frente e verso --}}
-            <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {{-- Envio único: 1 arquivo (PDF com 2 páginas ou foto com os dois lados) ou 2 arquivos (frente e verso) --}}
+            <input type="file" id="carteira_arquivos" class="hidden" multiple
+                   accept="application/pdf,image/jpeg,image/png,image/webp"
+                   @change="escolherArquivos($event)">
+            <label for="carteira_arquivos" x-show="!lados.frente.arquivo"
+                   class="group mt-4 flex flex-col items-center justify-center gap-2 px-4 py-8 rounded-xl border-2 border-dashed border-slate-300 bg-white cursor-pointer transition text-center hover:border-blue-400 hover:bg-blue-50/40">
+                <svg class="w-16 h-11 text-slate-300 group-hover:text-blue-400 transition" viewBox="0 0 56 40" fill="none"><rect x="1" y="1" width="54" height="38" rx="5" stroke="currentColor" stroke-width="2"/><circle cx="44" cy="17" r="5" fill="currentColor"/><path d="M36 30c1.5-4 4.5-6 8-6s6.5 2 8 6" fill="currentColor"/><rect x="7" y="9" width="20" height="3" rx="1.5" fill="currentColor"/><rect x="7" y="17" width="14" height="2.5" rx="1.25" fill="currentColor"/><rect x="7" y="23" width="17" height="2.5" rx="1.25" fill="currentColor"/></svg>
+                <span class="text-sm font-semibold text-slate-800">Enviar a carteira do conselho</span>
+                <span class="text-xs text-slate-500 max-w-md">PDF com frente e verso, foto com os dois lados, ou selecione as duas fotos de uma vez (frente e verso)</span>
+                <span class="mt-1 inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold group-hover:bg-blue-700">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                    Escolher arquivo(s)
+                </span>
+            </label>
+            <p x-show="aviso" x-cloak class="mt-3 flex items-start gap-2 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-xs text-blue-900">
+                <span>ℹ️</span><span x-text="aviso"></span>
+            </p>
+
+            {{-- Frente e verso identificados --}}
+            <div x-show="lados.frente.arquivo" x-cloak class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
                 @foreach(['frente' => ['Frente', 'Lado com foto, nome e nº do conselho', 'carteira_conselho'], 'verso' => ['Verso', 'Lado com CPF e dados pessoais', 'carteira_conselho_verso']] as $lado => [$rotuloLado, $dicaLado, $campoLado])
                 <div class="relative">
                     <input type="file" name="{{ $campoLado }}" id="carteira_{{ $lado }}" class="hidden"
@@ -85,7 +103,7 @@
                                 <p class="text-xs font-semibold text-slate-800 truncate" x-text="lados.{{ $lado }}.nome"></p>
                                 <p class="text-[11px] text-slate-500"><span x-text="lados.{{ $lado }}.tamanho"></span><span x-show="lados.{{ $lado }}.paginas > 1" x-text="' · ' + lados.{{ $lado }}.paginas + ' páginas'"></span></p>
                             </div>
-                            <label for="carteira_{{ $lado }}" x-show="!lendo" class="px-2 py-1 text-[11px] font-semibold text-slate-600 bg-slate-100 rounded-md hover:bg-slate-200 cursor-pointer">Trocar</label>
+                            <label :for="'{{ $lado }}' === 'frente' ? 'carteira_arquivos' : 'carteira_{{ $lado }}'" x-show="!lendo" class="px-2 py-1 text-[11px] font-semibold text-slate-600 bg-slate-100 rounded-md hover:bg-slate-200 cursor-pointer">Trocar</label>
                         </div>
                     </div>
 
@@ -126,6 +144,13 @@
 
             @error('carteira_conselho')<p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>@enderror
             @error('carteira_conselho_verso')<p class="mt-2 text-xs font-medium text-red-600">{{ $message }}</p>@enderror
+
+            {{-- Um arquivo só e o CPF não apareceu: talvez o verso esteja em outro arquivo --}}
+            <div x-show="versoJunto && !lados.verso.arquivo && lido && !lendo && resultado && !cpfCarteira" x-cloak
+                 class="mt-3 flex flex-col sm:flex-row sm:items-center gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-900">
+                <span class="flex-1">Não encontramos o <strong>CPF</strong> na carteira. Se o <strong>verso</strong> (lado com o CPF) estiver em outro arquivo, adicione-o.</span>
+                <button type="button" @click="adicionarVerso()" class="self-start sm:self-auto px-2.5 py-1 font-semibold text-white bg-amber-600 rounded-lg hover:bg-amber-700 whitespace-nowrap">Adicionar o verso</button>
+            </div>
 
             {{-- Falta o verso --}}
             <p x-show="faltaVerso && !lendo" x-cloak class="mt-3 flex items-center gap-2 text-xs font-medium text-blue-700">
@@ -179,7 +204,7 @@
                 <div class="bg-white px-4 py-3 space-y-3">
                     {{-- Opção 1: arquivo melhor --}}
                     <div class="flex flex-wrap items-center gap-2">
-                        <label for="carteira_frente" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg cursor-pointer">
+                        <label for="carteira_arquivos" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg cursor-pointer">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
                             Enviar arquivo mais nítido
                         </label>
@@ -275,7 +300,7 @@
                         </div>
                     </div>
                     <div class="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                        <label for="carteira_frente" @click="$refs.arquivoFrente.value = ''"
+                        <label for="carteira_arquivos"
                                class="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-center text-sm font-semibold text-slate-700 hover:bg-slate-50">
                             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
                             Enviar outra carteira
@@ -302,7 +327,7 @@
                     Confira se é a carteira do profissional certo.
                 </p>
                 <div class="mt-2 flex flex-wrap gap-2">
-                    <label for="carteira_frente" class="px-2.5 py-1 text-xs font-semibold bg-white border border-amber-300 rounded-lg hover:bg-amber-100 cursor-pointer">Enviar outra carteira</label>
+                    <label for="carteira_arquivos" class="px-2.5 py-1 text-xs font-semibold bg-white border border-amber-300 rounded-lg hover:bg-amber-100 cursor-pointer">Enviar outra carteira</label>
                     <span x-show="typeof solicitante !== 'undefined' && solicitante === 'proprio'" class="self-center text-xs">A carteira deve estar no seu nome.</span>
                     <button type="button" x-show="typeof solicitante === 'undefined' || solicitante !== 'proprio'" @click="usarNomeDaCarteira()"
                             class="px-2.5 py-1 text-xs font-semibold text-white bg-amber-600 rounded-lg hover:bg-amber-700">Usar o nome da carteira</button>
@@ -797,11 +822,12 @@
         <div class="space-y-4" @if(!empty($permitirComprovante)) x-show="comprovanteLiberado" x-cloak x-transition @endif>
         {{-- CEP --}}
         <div class="max-w-md">
-            <label class="block text-xs font-semibold text-gray-600 mb-1">CEP</label>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">CEP @if($tipo === 'medico')<span class="text-red-600">*</span>@endif</label>
             <div class="flex gap-2">
                 <div class="relative flex-1">
                     <input type="text" name="cep" x-model="cep"
                            x-mask="99999-999"
+                           @if($tipo === 'medico') :required="currentStep === 1" :pattern="currentStep === 1 ? '[0-9]{5}-?[0-9]{3}' : null" maxlength="9" @endif
                            @input="aoDigitarCep()"
                            @keydown.enter.prevent="buscarCep()"
                            :readonly="buscando"
@@ -872,7 +898,11 @@
             </svg>
             Passo 3: Locais de Trabalho
         </h3>
+        @if(!empty($locaisObrigatorios))
+        <p class="text-sm text-gray-500">Informe <strong>pelo menos um</strong> local onde o profissional atua. Comece pelo CEP de cada local.</p>
+        @else
         <p class="text-sm text-gray-500">Adicione os locais onde o profissional atua (opcional). Comece pelo CEP de cada local.</p>
+        @endif
     </div>
 
     <div class="space-y-4">
@@ -1121,6 +1151,13 @@ const lerTextoDoArquivo = async (file, aoProgredir, maxPaginas = 3, qualidade = 
     return ocrFontes(paginas, aoProgredir, qualidade);
 };
 const mesmoArquivo = (a, b) => !!(a && b && a.name === b.name && a.size === b.size && a.lastModified === b.lastModified);
+// Mesmo conteúdo (mesmo com outro nome): compara o hash SHA-256 dos arquivos
+const hashArquivo = async (f) => {
+    if (!window.crypto?.subtle) return f.name + '|' + f.size + '|' + f.lastModified;
+    const digest = await crypto.subtle.digest('SHA-256', await f.arrayBuffer());
+    return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
+};
+const arquivosIguais = async (a, b) => !!(a && b && a.size === b.size && (mesmoArquivo(a, b) || await hashArquivo(a) === await hashArquivo(b)));
 const miniaturaPdf = async (file, n = 1) => (await recortarMargens(await renderizarPagina(await abrirPdf(file), n, 900))).toDataURL('image/jpeg', 0.85);
 const postarLeitura = async (url, texto) => {
     const fd = new FormData();
@@ -1158,6 +1195,7 @@ function carteiraConselho(config) {
         nomeFormulario: '',
         cpfFormulario: '',
         cienteIlegivel: false,
+        aviso: '', // ex.: os dois arquivos enviados eram iguais
 
         init() {
             // Acompanha Nome e CPF (digitados ou preenchidos pelo "Para quem é o receituário?")
@@ -1253,7 +1291,67 @@ function carteiraConselho(config) {
             return '';
         },
 
-        async escolherArquivo(lado, evento) {
+        // Põe o arquivo no campo do formulário (frente ou verso) e devolve o campo
+        colocarNoCampo(lado, file) {
+            const campo = document.getElementById('carteira_' + lado);
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            campo.files = dt.files;
+            return campo;
+        },
+
+        // Envio único: identifica sozinho a frente e o verso
+        //  - 2 arquivos → frente e verso (iguais → usa só um)
+        //  - 1 arquivo  → PDF com 2+ páginas (página 2 = verso) ou frente e verso no mesmo arquivo
+        async escolherArquivos(evento) {
+            let arquivos = [...evento.target.files];
+            evento.target.value = '';
+            this.aviso = '';
+            this.erro = '';
+            if (!arquivos.length) return;
+            if (arquivos.length > 2) {
+                this.erro = 'Envie no máximo 2 arquivos: a frente e o verso da carteira.';
+                return;
+            }
+            // Confere antes de trocar: um arquivo recusado não pode apagar a carteira já escolhida
+            if (arquivos.some(f => !TIPOS_ACEITOS.includes(f.type))) {
+                this.erro = 'Envie a carteira em PDF ou imagem (JPG, PNG ou WEBP).';
+                return;
+            }
+            if (arquivos.some(f => f.size > 10 * 1024 * 1024)) {
+                this.erro = 'Cada arquivo deve ter no máximo 10 MB.';
+                return;
+            }
+            if (arquivos.length === 2 && await arquivosIguais(arquivos[0], arquivos[1])) {
+                arquivos = [arquivos[0]];
+                this.aviso = 'Os dois arquivos enviados são iguais — consideramos apenas um, com a frente e o verso.';
+            }
+
+            // Recomeça: limpa o verso anterior
+            this.versoJunto = false;
+            this.lados.verso = novoLado();
+            const verso = document.getElementById('carteira_verso');
+            if (verso) verso.value = '';
+
+            // Com 2 arquivos, a leitura só começa depois que o verso também estiver no lugar
+            await this.escolherArquivo('frente', { target: this.colocarNoCampo('frente', arquivos[0]) }, arquivos.length === 1);
+            if (this.lados.frente.arquivo !== arquivos[0]) return; // arquivo recusado (tipo ou tamanho)
+
+            if (arquivos.length === 2) {
+                this.versoNoPdf = false; // o verso é o 2º arquivo, não a 2ª página do PDF
+                await this.escolherArquivo('verso', { target: this.colocarNoCampo('verso', arquivos[1]) });
+            } else if (!this.versoNoPdf) {
+                this.marcarVersoJunto(true); // uma foto/página só: frente e verso juntos (lê em seguida)
+            }
+        },
+
+        // CPF não apareceu num arquivo só: abre a escolha do verso em separado
+        adicionarVerso() {
+            this.versoJunto = false;
+            document.getElementById('carteira_verso')?.click();
+        },
+
+        async escolherArquivo(lado, evento, ler = true) {
             const file = evento.target.files[0];
             if (!file) return;
             this.erro = '';
@@ -1268,8 +1366,10 @@ function carteiraConselho(config) {
                 return;
             }
 
-            // Mesmo arquivo nos dois lados: é frente e verso juntos
-            if (lado === 'verso' && mesmoArquivo(file, this.lados.frente.arquivo)) {
+            // Mesmo arquivo (mesmo conteúdo) nos dois lados: é frente e verso juntos
+            if (lado === 'verso' && await arquivosIguais(file, this.lados.frente.arquivo)) {
+                evento.target.value = '';
+                this.aviso = 'Esse arquivo é igual ao da frente — consideramos que a frente e o verso estão no mesmo arquivo.';
                 this.marcarVersoJunto(true);
                 return;
             }
@@ -1291,7 +1391,7 @@ function carteiraConselho(config) {
             } catch (e) {
                 console.warn('Prévia da carteira:', e);
             }
-            if (this.completa) this.lerTudo();
+            if (ler && this.completa) this.lerTudo();
         },
 
         async prepararPrevia(lado, file) {
@@ -1302,12 +1402,10 @@ function carteiraConselho(config) {
             }
             const pdf = await abrirPdf(file);
             l.paginas = pdf.numPages;
+            // Frente e verso no mesmo PDF: identificado pela contagem de páginas (não depende das miniaturas)
+            if (lado === 'frente' && pdf.numPages >= 2) this.versoNoPdf = true;
             l.previa = await miniaturaPdf(file, 1);
-            // Frente e verso no mesmo PDF
-            if (lado === 'frente' && pdf.numPages >= 2) {
-                l.previa2 = await miniaturaPdf(file, 2);
-                this.versoNoPdf = true;
-            }
+            if (lado === 'frente' && pdf.numPages >= 2) l.previa2 = await miniaturaPdf(file, 2);
         },
 
         async lerTudo() {

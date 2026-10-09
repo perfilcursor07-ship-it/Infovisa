@@ -55,6 +55,8 @@ class RegistroUsuarioExternoRequest extends FormRequest
                     $fail('A senha deve conter pelo menos um número.');
                 }
             }],
+            'modulos' => ['required', 'array', 'min:1'],
+            'modulos.*' => ['string', 'distinct', 'in:' . implode(',', array_keys(UsuarioExterno::MODULOS))],
             'aceite_termos' => ['accepted'],
         ];
     }
@@ -108,6 +110,10 @@ class RegistroUsuarioExternoRequest extends FormRequest
             'password.required' => 'A senha é obrigatória.',
             'password.min' => 'A senha deve ter no mínimo 8 caracteres.',
             'password.confirmed' => 'As senhas não conferem.',
+
+            'modulos.required' => 'Informe como você vai usar o InfoVISA.',
+            'modulos.min' => 'Informe como você vai usar o InfoVISA.',
+            'modulos.*.in' => 'Opção de uso inválida.',
 
             'aceite_termos.accepted' => 'Você deve ler e aceitar os termos e condições para continuar.',
         ];

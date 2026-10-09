@@ -4314,7 +4314,7 @@
 
                 {{-- Modal --}}
                 <div class="inline-block w-full max-w-lg my-8 overflow-hidden text-left align-middle transition-all transform bg-white rounded-lg shadow-xl">
-                    <form action="{{ route('admin.estabelecimentos.processos.destroy', [$estabelecimento->id, $processo->id]) }}" method="POST">
+                    <form action="{{ route('admin.estabelecimentos.processos.destroy', [$estabelecimento->id, $processo->id]) }}" method="POST" x-data="{ senhaExcluirProcesso: '' }">
                         @csrf
                         @method('DELETE')
                         
@@ -4383,6 +4383,10 @@
                             <p class="text-sm text-slate-500 italic">
                                 Esta ação não pode ser desfeita. Certifique-se de que realmente deseja excluir este processo.
                             </p>
+
+                            <div class="mt-4 space-y-2">
+                                @include('estabelecimentos.processos.partials.senha-exclusao', ['modelo' => 'senhaExcluirProcesso'])
+                            </div>
                         </div>
 
                         {{-- Footer --}}
@@ -4390,7 +4394,7 @@
                             <button type="button" @click="modalExcluirProcesso = false" class="flex-1 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors">
                                 Cancelar
                             </button>
-                            <button type="submit" class="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors">
+                            <button type="submit" :disabled="!senhaExcluirProcesso" class="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed">
                                 Excluir Permanentemente
                             </button>
                         </div>
@@ -5192,7 +5196,7 @@ Os comprovantes de pagamento dos DAREs devem ser juntados em um único arquivo."
                 modalOrdemServico: false,
                 modalAlertas: false,
                 modalRejeitar: false,
-                modalExcluirProcesso: false,
+                modalExcluirProcesso: @js((bool) ((request('excluir') || session('erro_exclusao')) && auth('interno')->user()->isAdmin())),
                 modalExcluirComSenha: false,
                 modalAtribuir: false,
                 modalRespostas: false,

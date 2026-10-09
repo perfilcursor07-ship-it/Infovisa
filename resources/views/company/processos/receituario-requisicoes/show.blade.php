@@ -83,6 +83,50 @@
     </div>
     @endif
 
+    {{-- Liberada: documento de numeração (SNCR) de cada tipo --}}
+    @if($requisicao->status === 'liberada')
+    @php $documentosLiberados = $requisicao->documentosLiberados(); @endphp
+    <section class="no-print bg-white rounded-xl border border-emerald-200 shadow-sm overflow-hidden">
+        <header class="px-5 py-3 bg-emerald-50/70 border-b border-emerald-100">
+            <h2 class="text-sm font-semibold text-emerald-900">✓ Numeração liberada pela Vigilância Sanitária</h2>
+            <p class="text-xs text-emerald-800">Baixe o documento de cada tipo: nele estão os números liberados no SNCR. Para a física, leve à gráfica; a eletrônica já fica no seu saldo do SNCR.</p>
+        </header>
+        <ul class="divide-y divide-slate-100">
+            @foreach($requisicao->linhasPedidas() as $l)
+            @php $doc = $l['documento_id'] ? $documentosLiberados->get($l['documento_id']) : null; @endphp
+            <li class="px-5 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
+                <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                    <span class="inline-flex items-center justify-center min-w-[2.5rem] h-9 px-1.5 rounded-lg {{ $l['liberado'] ? 'bg-emerald-600' : 'bg-slate-300' }} text-white text-sm font-bold">{{ $l['tipo'] }}</span>
+                    <span class="min-w-0">
+                        <span class="block text-sm font-semibold text-slate-900">{{ $l['nome_tipo'] }} <span class="font-normal text-slate-500">· {{ $l['rotulo_modalidade'] }}</span></span>
+                        <span class="block text-xs {{ $l['liberado'] < $l['pedido'] ? 'text-amber-700' : 'text-slate-500' }}">
+                            {{ $l['liberado'] ? number_format($l['liberado'], 0, ',', '.') . ' liberada(s)' : 'Não liberado' }} de {{ number_format($l['pedido'], 0, ',', '.') }} pedida(s)
+                        </span>
+                    </span>
+                </div>
+                @if($doc)
+                <div class="flex items-center gap-1.5 flex-shrink-0">
+                    <a href="{{ route('company.processos.documento.visualizar', [$processo->id, $doc->id]) }}" target="_blank"
+                       class="inline-flex items-center gap-1.5 h-9 px-3 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50">Ver documento</a>
+                    <a href="{{ route('company.processos.download', [$processo->id, $doc->id]) }}"
+                       class="inline-flex items-center gap-1.5 h-9 px-3 text-xs font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700">Baixar</a>
+                </div>
+                @endif
+            </li>
+            @endforeach
+        </ul>
+        @if($requisicao->observacao_vigilancia)
+        <p class="px-5 py-3 border-t border-slate-100 text-sm text-slate-700"><span class="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Observação da Vigilância</span>{{ $requisicao->observacao_vigilancia }}</p>
+        @endif
+    </section>
+    @elseif($requisicao->status === 'indeferida')
+    <section class="no-print bg-white rounded-xl border border-red-200 shadow-sm px-5 py-4">
+        <h2 class="text-sm font-semibold text-red-800">Requisição indeferida</h2>
+        <p class="mt-1 text-sm text-slate-800 whitespace-pre-line">{{ $requisicao->observacao_vigilancia }}</p>
+        <p class="mt-2 text-xs text-slate-500">Você pode fazer uma nova requisição no processo, corrigindo o que foi apontado.</p>
+    </section>
+    @endif
+
     {{-- Comprovante --}}
     <article id="comprovante-requisicao" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <header class="px-6 py-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-start justify-between gap-3">
@@ -115,7 +159,7 @@
 
         {{-- Quantidades --}}
         <section class="px-6 py-4 border-b border-slate-100">
-            <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2.5">Tipos de notificação requerida (quantidade de blocos)</h2>
+            <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2.5">Tipos de notificação requerida (quantidade de {{ $requisicao->emBlocos() ? 'blocos' : 'numerações' }})</h2>
             <div class="overflow-x-auto">
                 <table class="w-full text-sm border border-slate-200 rounded-lg overflow-hidden">
                     <thead>

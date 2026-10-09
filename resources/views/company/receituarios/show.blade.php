@@ -21,7 +21,7 @@
         ? '<div class="' . $classe . '"><dt class="text-xs text-slate-500">' . e($rotulo) . '</dt><dd class="mt-0.5 text-sm font-medium text-slate-900 break-words">' . e($valor) . '</dd></div>'
         : '';
     $avisoCadastro = [
-        'pendente' => ['classe' => 'border-blue-200 bg-blue-50 text-blue-900', 'icone' => 'text-blue-500', 'titulo' => 'Cadastro em análise', 'texto' => 'A Vigilância Sanitária está conferindo os documentos do cadastro. Depois da aprovação você poderá abrir o processo de receituário.'],
+        'pendente' => ['classe' => 'border-blue-200 bg-blue-50 text-blue-900', 'icone' => 'text-blue-500', 'titulo' => 'Cadastro em análise', 'texto' => 'A Vigilância Sanitária está conferindo os documentos do cadastro. Depois da aprovação, o processo de receituário é aberto automaticamente.'],
         'rejeitado' => ['classe' => 'border-red-200 bg-red-50 text-red-900', 'icone' => 'text-red-500', 'titulo' => 'Correção solicitada', 'texto' => 'A Vigilância Sanitária rejeitou ' . ($docsRejeitados === 1 ? 'um documento' : 'documentos') . ' do cadastro. Veja o motivo em Documentos e corrija.'],
     ][$receituario->status] ?? null;
     $iconeMenu = 'w-[18px] h-[18px] text-slate-400 group-hover:text-blue-600';
@@ -140,7 +140,7 @@
                     </button>
                 </nav>
 
-                @if($receituario->isAprovado() && $tiposProcesso->isNotEmpty())
+                @if($receituario->isAprovado() && $tiposProcesso->isNotEmpty() && $processosAtivos->isEmpty())
                     <button type="button" @click="aba = 'processos'; $nextTick(() => $dispatch('abrir-processo-receituario'))"
                             class="mt-3 w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
@@ -284,7 +284,7 @@
                             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
                         </span>
                         <p class="text-sm font-semibold text-slate-800">Processos disponíveis depois da aprovação do cadastro</p>
-                        <p class="text-xs text-slate-500 mt-1 max-w-md mx-auto">Quando a Vigilância Sanitária aprovar os documentos do cadastro, você poderá abrir aqui o processo de receituário, onde é feita a requisição.</p>
+                        <p class="text-xs text-slate-500 mt-1 max-w-md mx-auto">Quando a Vigilância Sanitária aprovar os documentos do cadastro, o processo de receituário é aberto automaticamente aqui, onde é feita a requisição.</p>
                         <button type="button" @click="aba = 'documentos'" class="mt-4 text-xs font-semibold text-blue-700 hover:underline">Ver situação dos documentos →</button>
                     </div>
                 @endif

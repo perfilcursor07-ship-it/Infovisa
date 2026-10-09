@@ -15,7 +15,13 @@ class DashboardController extends Controller
 {
     public function index()
     {
-        $usuarioId = auth('externo')->id();
+        // Quem não usa o módulo de processos (ex.: só receituário) começa pela sua área
+        $usuario = auth('externo')->user();
+        if (!$usuario->temModulo('processos')) {
+            return redirect()->route($usuario->rotaInicial());
+        }
+
+        $usuarioId = $usuario->id;
         
         // Buscar estabelecimentos do usuário (próprios e vinculados)
         $estabelecimentos = Estabelecimento::with('municipio')
