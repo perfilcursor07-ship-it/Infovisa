@@ -190,12 +190,11 @@
     @else
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             @foreach($processos as $processo)
-                <a href="{{ route('admin.estabelecimentos.processos.show', [$estabelecimento->id, $processo->id]) }}" 
-                   class="block bg-white rounded-lg shadow-md border border-gray-100 hover:shadow-lg transition-all duration-200 hover:-translate-y-1 cursor-pointer">
+                <div class="bg-white rounded-lg shadow-md border border-gray-100 hover:shadow-lg transition-shadow duration-200">
                     <div class="p-5">
                         {{-- Header do Card --}}
                         <div class="flex items-start justify-between mb-4">
-                            <div class="flex-1">
+                            <div class="flex-1 min-w-0">
                                 <div class="flex items-center gap-2 mb-2">
                                     <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold
                                         @if($processo->status_cor === 'blue') bg-blue-100 text-blue-800
@@ -208,8 +207,11 @@
                                         {{ $processo->status_nome }}
                                     </span>
                                 </div>
-                                <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">{{ $processo->tipo_nome }}</h3>
-                                <p class="text-lg font-bold text-blue-600 mt-1">{{ $processo->numero_processo }}</p>
+                                <a href="{{ route('admin.estabelecimentos.processos.show', [$estabelecimento->id, $processo->id]) }}"
+                                   class="group inline-block rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
+                                    <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wide group-hover:text-blue-700">{{ $processo->tipo_nome }}</h3>
+                                    <p class="text-lg font-bold text-blue-600 mt-1 group-hover:text-blue-700">{{ $processo->numero_processo }}</p>
+                                </a>
                             </div>
                             <div class="relative" x-data="{ open: false }" @click.stop>
                                 <button @click.stop="open = !open" 
@@ -264,7 +266,7 @@
                         @endif
 
                     </div>
-                </a>
+                </div>
             @endforeach
         </div>
     @endif
