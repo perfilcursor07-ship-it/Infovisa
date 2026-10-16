@@ -4,9 +4,14 @@
 @section('page-title', 'Processos')
 
 @section('content')
-<div class="max-w-8xl mx-auto" x-data="{ 
-    modalAberto: {{ session('error') ? 'true' : 'false' }}, 
-    tipoSelecionado: '' 
+<div class="max-w-8xl mx-auto" x-data="{
+    modalAberto: {{ session('error') ? 'true' : 'false' }},
+    tipoSelecionado: '',
+    tiposAnuaisJaAbertos: @js($tiposAnuaisJaAbertos),
+    isAdmin: @js(auth('interno')->user()->isAdmin()),
+    confirmarDuplicado: false,
+    get duplicadoAnual() { return this.tiposAnuaisJaAbertos.includes(this.tipoSelecionado) },
+    get podeCriar() { return this.tipoSelecionado && (!this.duplicadoAnual || (this.isAdmin && this.confirmarDuplicado)) }
 }">
     {{-- Header --}}
     <div class="mb-6">
@@ -82,8 +87,9 @@
                             <label class="block text-sm font-medium text-gray-700 mb-2">
                                 Tipo de Processo <span class="text-red-500">*</span>
                             </label>
-                            <select name="tipo" 
+                            <select name="tipo"
                                     x-model="tipoSelecionado"
+                                    @change="confirmarDuplicado = false"
                                     required
                                     class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900">
                                 <option value="">Selecione o tipo...</option>
@@ -103,6 +109,23 @@
                                     Selecione o tipo de processo que deseja abrir
                                 @endif
                             </p>
+
+                            {{-- Tipo anual que já tem processo no ano: só o administrador pode abrir outro --}}
+                            <div x-show="duplicadoAnual" x-cloak class="mt-3 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                                <p class="text-xs text-amber-800">
+                                    Já existe um processo deste tipo em {{ date('Y') }} neste estabelecimento e a configuração permite apenas um por ano.
+                                </p>
+                                <template x-if="isAdmin">
+                                    <label class="mt-2 flex items-start gap-2 text-xs font-medium text-amber-900 cursor-pointer">
+                                        <input type="checkbox" name="confirmar_duplicado_anual" value="1" x-model="confirmarDuplicado"
+                                               class="mt-0.5 rounded border-amber-300 text-amber-600 focus:ring-amber-500">
+                                        <span>Estou ciente e quero abrir outro processo deste tipo mesmo assim (permitido somente ao administrador).</span>
+                                    </label>
+                                </template>
+                                <template x-if="!isAdmin">
+                                    <p class="mt-1 text-xs font-medium text-amber-900">Somente o administrador pode abrir outro processo deste tipo no mesmo ano.</p>
+                                </template>
+                            </div>
                         </div>
 
                         {{-- Observações --}}
@@ -136,8 +159,8 @@
                                 Cancelar
                             </button>
                             <button type="submit"
-                                    :disabled="!tipoSelecionado"
-                                    :class="tipoSelecionado ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-300 cursor-not-allowed'"
+                                    :disabled="!podeCriar"
+                                    :class="podeCriar ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-300 cursor-not-allowed'"
                                     class="flex-1 px-4 py-2.5 text-sm font-semibold text-white rounded-lg transition-colors">
                                 Criar Processo
                             </button>
@@ -190,7 +213,12 @@
     @else
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             @foreach($processos as $processo)
-                <div class="bg-white rounded-lg shadow-md border border-gray-100 hover:shadow-lg transition-shadow duration-200">
+                @php
+                    $processoAcessivel = (bool) $processo->acessivel;
+                    $escopoProcesso = $processo->resolverEscopoCompetencia();
+                @endphp
+                <div class="rounded-lg border transition-shadow duration-200 {{ $processoAcessivel ? 'bg-white shadow-md border-gray-100 hover:shadow-lg' : 'bg-gray-50 border-dashed border-gray-300' }}"
+                     @unless($processoAcessivel) title="Processo de competência {{ $escopoProcesso === 'municipal' ? 'municipal' : 'estadual' }}. Você pode ver que ele existe, mas não tem permissão para acessá-lo." @endunless>
                     <div class="p-5">
                         {{-- Header do Card --}}
                         <div class="flex items-start justify-between mb-4">
@@ -206,13 +234,30 @@
                                         @endif">
                                         {{ $processo->status_nome }}
                                     </span>
+                                    @unless($processoAcessivel)
+                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-200 text-gray-700">
+                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                                            </svg>
+                                            Competência {{ $escopoProcesso === 'municipal' ? 'Municipal' : 'Estadual' }}
+                                        </span>
+                                    @endunless
                                 </div>
+                                @if($processoAcessivel)
                                 <a href="{{ route('admin.estabelecimentos.processos.show', [$estabelecimento->id, $processo->id]) }}"
                                    class="group inline-block rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
                                     <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wide group-hover:text-blue-700">{{ $processo->tipo_nome }}</h3>
                                     <p class="text-lg font-bold text-blue-600 mt-1 group-hover:text-blue-700">{{ $processo->numero_processo }}</p>
                                 </a>
+                                @else
+                                <div>
+                                    <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide">{{ $processo->tipo_nome }}</h3>
+                                    <p class="text-lg font-bold text-gray-500 mt-1">{{ $processo->numero_processo }}</p>
+                                    <p class="text-xs text-gray-500 mt-1">Sem permissão de acesso</p>
+                                </div>
+                                @endif
                             </div>
+                            @if($processoAcessivel)
                             <div class="relative" x-data="{ open: false }" @click.stop>
                                 <button @click.stop="open = !open" 
                                         class="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors">
@@ -237,6 +282,7 @@
                                     @endif
                                 </div>
                             </div>
+                            @endif
                         </div>
 
                         {{-- Detalhes --}}
@@ -258,7 +304,7 @@
                         </div>
 
                         {{-- Observações (se houver) --}}
-                        @if($processo->observacoes)
+                        @if($processoAcessivel && $processo->observacoes)
                             <div class="mt-3 pt-3 border-t border-gray-100">
                                 <p class="text-xs text-gray-400 uppercase font-semibold mb-1 tracking-wide">Observações</p>
                                 <p class="text-xs text-gray-600 line-clamp-2">{{ $processo->observacoes }}</p>

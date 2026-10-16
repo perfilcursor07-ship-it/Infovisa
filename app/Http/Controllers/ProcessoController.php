@@ -145,6 +145,29 @@ class ProcessoController extends Controller
     }
 
     /**
+     * Mesma regra de acesso da tela do estabelecimento: o usuário enxerga o estabelecimento
+     * quando ele possui algum escopo de competência da esfera do usuário.
+     */
+    private function usuarioPodeVerEstabelecimento(Estabelecimento $estabelecimento, $usuario): bool
+    {
+        if ($usuario->isAdmin()) {
+            return true;
+        }
+
+        if ($usuario->isEstadual()) {
+            return $estabelecimento->possuiEscopoCompetencia('estadual');
+        }
+
+        if ($usuario->isMunicipal()) {
+            return $usuario->municipio_id
+                && (int) $estabelecimento->municipio_id === (int) $usuario->municipio_id
+                && $estabelecimento->possuiEscopoCompetencia('municipal');
+        }
+
+        return false;
+    }
+
+    /**
      * Exibe todos os processos do sistema com filtros
      */
     public function indexGeral(Request $request)
@@ -680,23 +703,40 @@ class ProcessoController extends Controller
     public function index($estabelecimentoId)
     {
         $estabelecimento = Estabelecimento::findOrFail($estabelecimentoId);
-        
+        $usuario = auth('interno')->user();
+
+        // Quem tem acesso ao estabelecimento vê todos os processos dele (para manter o histórico visível),
+        // mas os de outra esfera de competência aparecem bloqueados (sem link para abrir).
+        $exibeProcessosDeOutraEsfera = $this->usuarioPodeVerEstabelecimento($estabelecimento, $usuario);
+
         $processos = Processo::where('estabelecimento_id', $estabelecimentoId)
             ->with(['usuario', 'tipoProcesso'])
             ->orderBy('created_at', 'desc')
             ->get()
-            ->filter(fn ($processo) => $this->processoPertenceAoEscopoUsuario($processo, auth('interno')->user()))
+            ->each(function ($processo) use ($estabelecimento, $usuario) {
+                $processo->setRelation('estabelecimento', $estabelecimento);
+                $processo->acessivel = $this->processoPertenceAoEscopoUsuario($processo, $usuario);
+            })
+            ->filter(fn ($processo) => $processo->acessivel || $exibeProcessosDeOutraEsfera)
             ->values();
-        
+
         // Busca tipos de processo ativos e ordenados (filtrados por usuário)
         $tiposProcesso = TipoProcesso::ativos()
-            ->paraUsuario(auth('interno')->user())
+            ->paraUsuario($usuario)
             ->ordenado()
             ->get()
-            ->filter(fn ($tipo) => $this->tipoProcessoVisivelParaUsuarioNoEstabelecimento($tipo, $estabelecimento, auth('interno')->user()))
+            ->filter(fn ($tipo) => $this->tipoProcessoVisivelParaUsuarioNoEstabelecimento($tipo, $estabelecimento, $usuario))
             ->values();
-        
-        return view('estabelecimentos.processos.index', compact('estabelecimento', 'processos', 'tiposProcesso'));
+
+        // Tipos anuais que já possuem processo no ano atual (só o administrador pode abrir outro)
+        $tiposAnuaisJaAbertos = Processo::where('estabelecimento_id', $estabelecimento->id)
+            ->where('ano', date('Y'))
+            ->whereIn('tipo', $tiposProcesso->where('anual', true)->pluck('codigo'))
+            ->distinct()
+            ->pluck('tipo')
+            ->values();
+
+        return view('estabelecimentos.processos.index', compact('estabelecimento', 'processos', 'tiposProcesso', 'tiposAnuaisJaAbertos'));
     }
 
     /**
@@ -735,22 +775,40 @@ class ProcessoController extends Controller
             'tipo' => 'required|in:' . implode(',', $codigosAtivos),
             'observacoes' => 'nullable|string|max:1000',
         ]);
-        
+
         // Busca o tipo de processo para verificar se é anual
         $tipoProcesso = TipoProcesso::where('codigo', $validated['tipo'])->first();
-        
-        // Verifica se é processo anual e se já existe no ano atual
+
+        // Verifica se é processo anual e se já existe no ano atual.
+        // O administrador pode abrir outro no mesmo ano (ex.: troca de competência), desde que confirme.
         if ($tipoProcesso && $tipoProcesso->anual) {
             $anoAtual = date('Y');
             $jaExiste = Processo::where('estabelecimento_id', $estabelecimento->id)
                 ->where('tipo', $validated['tipo'])
                 ->where('ano', $anoAtual)
                 ->exists();
-            
+
             if ($jaExiste) {
-                return redirect()
-                    ->back()
-                    ->with('error', 'Já existe um processo de ' . $tipoProcesso->nome . ' para o ano ' . $anoAtual . ' neste estabelecimento.');
+                $usuario = auth('interno')->user();
+
+                if (!$usuario->isAdmin()) {
+                    return redirect()
+                        ->back()
+                        ->with('error', 'Já existe um processo de ' . $tipoProcesso->nome . ' para o ano ' . $anoAtual . ' neste estabelecimento. Somente o administrador pode abrir outro processo deste tipo no mesmo ano.');
+                }
+
+                if (!$request->boolean('confirmar_duplicado_anual')) {
+                    return redirect()
+                        ->back()
+                        ->with('error', 'Já existe um processo de ' . $tipoProcesso->nome . ' para o ano ' . $anoAtual . ' neste estabelecimento. Marque a confirmação para abrir outro mesmo assim.');
+                }
+
+                \Log::info('Administrador abriu processo anual duplicado no mesmo ano', [
+                    'usuario_id' => $usuario->id,
+                    'estabelecimento_id' => $estabelecimento->id,
+                    'tipo' => $validated['tipo'],
+                    'ano' => $anoAtual,
+                ]);
             }
         }
 

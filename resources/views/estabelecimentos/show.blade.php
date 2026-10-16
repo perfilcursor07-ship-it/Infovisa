@@ -594,8 +594,14 @@
                                 ? ['label' => 'Municipal' . ($estabelecimento->municipio ? ' · ' . $estabelecimento->municipio : ''), 'classe' => 'bg-teal-50 text-teal-700 ring-teal-200', 'titulo' => 'Processo de competência da Vigilância Sanitária Municipal']
                                 : null);
                     @endphp
+                    @php $processoAcessivel = (bool) $processo->acessivel; @endphp
+                    @if($processoAcessivel)
                     <a href="{{ route('admin.estabelecimentos.processos.show', [$estabelecimento->id, $processo->id]) }}"
                        class="group flex flex-col bg-white rounded-xl border border-slate-200 hover:border-blue-300 hover:shadow-md transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                    @else
+                    <div class="flex flex-col bg-slate-50 rounded-xl border border-dashed border-slate-300 cursor-not-allowed"
+                         title="Processo de competência {{ $escopoProcesso === 'municipal' ? 'municipal' : 'estadual' }}. Você pode ver que ele existe, mas não tem permissão para acessá-lo.">
+                    @endif
 
                         <div class="p-4 flex-1 flex flex-col gap-3">
                             {{-- Tipo + Competência --}}
@@ -622,6 +628,13 @@
                                 <span class="truncate">Competência {{ $competenciaProcesso['label'] }}</span>
                             </span>
                             @endif
+
+                            @unless($processoAcessivel)
+                            <span class="self-start inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-semibold bg-slate-200 text-slate-700">
+                                <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                                Sem permissão de acesso
+                            </span>
+                            @endunless
 
                             {{-- Com quem está --}}
                             <div class="flex items-center gap-2.5">
@@ -682,10 +695,16 @@
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
                                     <span class="tabular-nums">{{ $processo->documentos_count }}</span>
                                 </span>
+                                @if($processoAcessivel)
                                 <svg class="w-4 h-4 text-slate-300 group-hover:text-blue-600 group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+                                @endif
                             </div>
                         </div>
+                    @if($processoAcessivel)
                     </a>
+                    @else
+                    </div>
+                    @endif
                     @endforeach
                 </div>
                 @endif

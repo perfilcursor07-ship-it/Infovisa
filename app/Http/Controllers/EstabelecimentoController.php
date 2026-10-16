@@ -539,7 +539,11 @@ class EstabelecimentoController extends Controller
             ->limit(6)
             ->get()
             // evita uma consulta por card ao resolver a competência (Estado/Município) de cada processo
-            ->each(fn ($processo) => $processo->setRelation('estabelecimento', $estabelecimento));
+            ->each(function ($processo) use ($estabelecimento) {
+                $processo->setRelation('estabelecimento', $estabelecimento);
+                // processos de outra esfera aparecem no card, mas sem link para abrir
+                $processo->acessivel = $processo->pertenceAoEscopoDoUsuario(auth('interno')->user());
+            });
         $totalProcessosAtivos = $estabelecimento->processos()->whereIn('status', $statusAtivos)->count();
         $totalProcessos = $estabelecimento->processos()->count();
         
