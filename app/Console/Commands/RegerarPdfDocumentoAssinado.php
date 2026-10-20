@@ -15,6 +15,7 @@ class RegerarPdfDocumentoAssinado extends Command
                             {--processo= : Id do processo, regera todos os documentos assinados dele}
                             {--tipo= : Tipo de processo (ex.: descentralizacao), regera todos os afetados}
                             {--dry-run : Apenas mostra o que seria regerado}
+                            {--todos : Inclui também os documentos cuja logomarca já está correta}
                             {--force : Aplica sem pedir confirmação}';
 
     protected $description = 'Regera o PDF de documentos já assinados, aplicando a logomarca correta do processo';
@@ -39,21 +40,42 @@ class RegerarPdfDocumentoAssinado extends Command
         $this->newLine();
 
         $aRegerar = [];
+        $jaCorretos = 0;
 
         foreach ($documentos as $documento) {
             $processo = $documento->processo;
             $logomarcaCorreta = $processo?->logomarcaDocumento() ?? $estadual;
+            $logomarcaAntiga = $this->logomarcaPelaRegraAntiga($processo) ?? $estadual;
+            $mudou = $logomarcaCorreta !== $logomarcaAntiga;
+
+            // O PDF guardado foi desenhado pela regra antiga; se ela dá o mesmo resultado
+            // de hoje, o arquivo já está certo e regerar só repetiria o que está lá.
+            if (!$mudou && !$this->option('todos')) {
+                $jaCorretos++;
+                continue;
+            }
 
             $this->line("Documento {$documento->numero_documento} (id {$documento->id})");
             $this->line('  processo .........: ' . ($processo
                 ? $processo->numero_processo . ' [' . $processo->tipo . ']'
                 : 'sem processo'));
             $this->line('  PDF atual ........: ' . ($documento->arquivo_pdf ?: '(não gerado)'));
+            $this->line('  logomarca no PDF .: ' . $logomarcaAntiga);
             $this->line('  logomarca correta : ' . $logomarcaCorreta);
-            $this->line('  é a estadual? ....: ' . ($logomarcaCorreta === $estadual ? 'sim' : 'não'));
+            $this->line('  precisa regerar? .: ' . ($mudou ? 'SIM' : 'não (já está correta)'));
 
             $aRegerar[] = $documento;
             $this->newLine();
+        }
+
+        if ($jaCorretos > 0) {
+            $this->info("{$jaCorretos} documento(s) já estão com a logomarca correta e foram ignorados (use --todos para incluir).");
+            $this->newLine();
+        }
+
+        if ($aRegerar === []) {
+            $this->info('Nada a regerar.');
+            return 0;
         }
 
         if ($dryRun) {
@@ -106,6 +128,31 @@ class RegerarPdfDocumentoAssinado extends Command
         $this->info("Concluído: {$ok} regerado(s), {$erros} com erro.");
 
         return $erros === 0 ? 0 : 1;
+    }
+
+    /**
+     * Logomarca que o PDF guardado recebeu: a regra anterior, que olhava só a competência
+     * do estabelecimento. Comparando com a de hoje dá para saber quais arquivos ficaram
+     * errados e quais já estão certos.
+     */
+    private function logomarcaPelaRegraAntiga($processo): ?string
+    {
+        $estabelecimento = $processo?->estabelecimento;
+
+        if (!$estabelecimento || $estabelecimento->isCompetenciaEstadual()) {
+            return ConfiguracaoSistema::logomarcaEstadual();
+        }
+
+        $municipio = null;
+        if ($estabelecimento->municipio_id) {
+            $municipio = $estabelecimento->relationLoaded('municipio') && is_object($estabelecimento->getRelation('municipio'))
+                ? $estabelecimento->getRelation('municipio')
+                : \App\Models\Municipio::find($estabelecimento->municipio_id);
+        }
+
+        return $municipio && !empty($municipio->logomarca)
+            ? $municipio->logomarca
+            : ConfiguracaoSistema::logomarcaEstadual();
     }
 
     /** @return \Illuminate\Support\Collection<int, DocumentoDigital>|null */
