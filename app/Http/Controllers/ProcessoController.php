@@ -1342,20 +1342,9 @@ class ProcessoController extends Controller
             ->get()
             ->unique('id');
         
-        // Determina qual logomarca usar (mesma lógica dos PDFs)
-        $logomarca = null;
-        if ($estabelecimento->isCompetenciaEstadual()) {
-            $logomarca = \App\Models\ConfiguracaoSistema::logomarcaEstadual();
-        } elseif ($estabelecimento->municipio_id && ($municipioLogo = \App\Models\Municipio::find($estabelecimento->municipio_id))) {
-            // Obs.: $estabelecimento->municipio devolve a coluna texto, não a relação
-            if (!empty($municipioLogo->logomarca)) {
-                $logomarca = $municipioLogo->logomarca;
-            } else {
-                $logomarca = \App\Models\ConfiguracaoSistema::logomarcaEstadual();
-            }
-        } else {
-            $logomarca = \App\Models\ConfiguracaoSistema::logomarcaEstadual();
-        }
+        // Logomarca do processo (mesma regra da criação, do preview e do PDF assinado)
+        $logomarca = $processo?->logomarcaDocumento()
+            ?? \App\Models\ConfiguracaoSistema::logomarcaEstadual();
         
         // Prepara dados para o PDF
         $data = [
@@ -1926,24 +1915,10 @@ class ProcessoController extends Controller
                 $writer = new \Endroid\QrCode\Writer\PngWriter();
                 $qrCodeBase64 = base64_encode($writer->write($qrCode)->getString());
 
-                // Determina logomarca
-                $logomarca = null;
-                if ($estabelecimentoDoc) {
-                    if ($estabelecimentoDoc->isCompetenciaEstadual()) {
-                        $logomarca = \App\Models\ConfiguracaoSistema::logomarcaEstadual();
-                    } elseif ($estabelecimentoDoc->municipio_id) {
-                        $municipio = $estabelecimentoDoc->relationLoaded('municipioRelacionado') && $estabelecimentoDoc->municipioRelacionado
-                            ? $estabelecimentoDoc->municipioRelacionado
-                            : \App\Models\Municipio::find($estabelecimentoDoc->municipio_id);
-                        $logomarca = ($municipio && !empty($municipio->logomarca))
-                            ? $municipio->logomarca
-                            : \App\Models\ConfiguracaoSistema::logomarcaEstadual();
-                    } else {
-                        $logomarca = \App\Models\ConfiguracaoSistema::logomarcaEstadual();
-                    }
-                } else {
-                    $logomarca = \App\Models\ConfiguracaoSistema::logomarcaEstadual();
-                }
+                // Logomarca: este caminho re-renderiza o PDF em vez de servir o arquivo
+                // gravado, então precisa da mesma regra usada na geração
+                $logomarca = $processo?->logomarcaDocumento()
+                    ?? \App\Models\ConfiguracaoSistema::logomarcaEstadual();
 
                 // Carrega assinaturas
                 $docDigital->load(['tipoDocumento', 'assinaturas' => function($q) {
@@ -2004,24 +1979,9 @@ class ProcessoController extends Controller
             $docParaPreview = clone $docDigital;
             $docParaPreview->conteudo = $conteudoParaExibir;
 
-            // Determina logomarca
-            $logomarca = null;
-            if ($estabelecimentoDoc) {
-                if ($estabelecimentoDoc->isCompetenciaEstadual()) {
-                    $logomarca = \App\Models\ConfiguracaoSistema::logomarcaEstadual();
-                } elseif ($estabelecimentoDoc->municipio_id) {
-                    $municipio = $estabelecimentoDoc->relationLoaded('municipioRelacionado') && $estabelecimentoDoc->municipioRelacionado
-                        ? $estabelecimentoDoc->municipioRelacionado
-                        : \App\Models\Municipio::find($estabelecimentoDoc->municipio_id);
-                    $logomarca = ($municipio && !empty($municipio->logomarca))
-                        ? $municipio->logomarca
-                        : \App\Models\ConfiguracaoSistema::logomarcaEstadual();
-                } else {
-                    $logomarca = \App\Models\ConfiguracaoSistema::logomarcaEstadual();
-                }
-            } else {
-                $logomarca = \App\Models\ConfiguracaoSistema::logomarcaEstadual();
-            }
+            // Logomarca: preview re-renderizado, mesma regra da geração
+            $logomarca = $processo?->logomarcaDocumento()
+                ?? \App\Models\ConfiguracaoSistema::logomarcaEstadual();
 
             $pdf = Pdf::loadView('documentos.pdf-preview', [
                 'documento' => $docParaPreview,
