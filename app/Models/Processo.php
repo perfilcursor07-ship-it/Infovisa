@@ -344,6 +344,44 @@ class Processo extends Model
     }
 
     /**
+     * Logomarca que os documentos deste processo devem usar.
+     *
+     * Regra geral (inalterada): competência estadual usa a logomarca do Estado; municipal usa a
+     * do município, caindo na estadual quando o município não tem logomarca cadastrada.
+     *
+     * Exceção: processo de DESCENTRALIZAÇÃO é sempre conduzido pelo Estado. O estabelecimento
+     * nesses casos costuma ser a própria vigilância municipal, cujos CNAEs não são da VISA
+     * (84.11-6-00, 84.12-4-00) e por isso a pactuação não o classifica como estadual — o
+     * documento saía com a logomarca do município. A pactuação continua como está; aqui só se
+     * reconhece que o documento é do Estado por causa do tipo do processo.
+     */
+    public function logomarcaDocumento(): ?string
+    {
+        if ($this->tipo === 'descentralizacao') {
+            return ConfiguracaoSistema::logomarcaEstadual();
+        }
+
+        $estabelecimento = $this->estabelecimento;
+
+        if (!$estabelecimento || $estabelecimento->isCompetenciaEstadual()) {
+            return ConfiguracaoSistema::logomarcaEstadual();
+        }
+
+        // Atenção: o estabelecimento tem uma COLUNA string chamada "municipio" além da relação.
+        // Ler $estabelecimento->municipio devolve a string, por isso a relação é pega pelo nome.
+        $municipio = null;
+        if ($estabelecimento->municipio_id) {
+            $municipio = $estabelecimento->relationLoaded('municipio') && is_object($estabelecimento->getRelation('municipio'))
+                ? $estabelecimento->getRelation('municipio')
+                : Municipio::find($estabelecimento->municipio_id);
+        }
+
+        return $municipio && !empty($municipio->logomarca)
+            ? $municipio->logomarca
+            : ConfiguracaoSistema::logomarcaEstadual();
+    }
+
+    /**
      * Relacionamento com tipo de processo
      */
     public function tipoProcesso()

@@ -1944,7 +1944,9 @@ class ProcessoController extends Controller
         // Processos estaduais → logomarca estadual (configuração do sistema)
         // Processos municipais → logomarca do município do estabelecimento
         $logomarca = null;
-        $isEstadual = $estabelecimento->isCompetenciaEstadual();
+        // Descentralização é conduzida pelo Estado mesmo quando o estabelecimento é a própria
+        // vigilância municipal, cujos CNAEs não são da VISA e por isso não entram na pactuação
+        $isEstadual = $processo->tipo === 'descentralizacao' || $estabelecimento->isCompetenciaEstadual();
 
         if (!$isEstadual) {
             // Competência municipal: usa logomarca do município

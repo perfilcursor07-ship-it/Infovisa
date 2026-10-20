@@ -494,40 +494,17 @@ class DocumentoDigitalController extends Controller
     }
 
     /**
-     * Determina qual logomarca usar no documento baseado na competência e município
-     * 
-     * REGRAS:
-     * 1. Se estabelecimento é de COMPETÊNCIA ESTADUAL -> sempre usa logomarca estadual
-     * 2. Se estabelecimento é MUNICIPAL e município tem logomarca -> usa logomarca do município
-     * 3. Se estabelecimento é MUNICIPAL mas município NÃO tem logomarca -> usa logomarca estadual (fallback)
-     * 4. Se não houver processo -> usa logomarca do usuário logado
+     * Logomarca do documento. A regra fica no processo (Processo::logomarcaDocumento),
+     * para a tela de criação, o preview e o PDF assinado decidirem igual.
+     * Sem processo, usa a logomarca do usuário logado.
      */
     private function determinarLogomarca($processo, $usuarioLogado)
     {
-        // Se não houver processo, usa logomarca do usuário
         if (!$processo || !$processo->estabelecimento) {
             return $usuarioLogado->getLogomarcaDocumento();
         }
 
-        $estabelecimento = $processo->estabelecimento;
-        
-        // 1. Se estabelecimento é de COMPETÊNCIA ESTADUAL -> sempre usa logomarca estadual
-        if ($estabelecimento->isCompetenciaEstadual()) {
-            return \App\Models\ConfiguracaoSistema::logomarcaEstadual();
-        }
-        
-        // 2. Se estabelecimento é MUNICIPAL e tem município vinculado
-        if ($estabelecimento->municipio_id) {
-            $municipio = $estabelecimento->municipioRelacionado;
-            
-            // Se município tem logomarca cadastrada, usa ela
-            if ($municipio && $municipio->logomarca) {
-                return $municipio->logomarca;
-            }
-        }
-        
-        // 3. Fallback: município sem logomarca ou sem município vinculado -> usa logomarca estadual
-        return \App\Models\ConfiguracaoSistema::logomarcaEstadual();
+        return $processo->logomarcaDocumento();
     }
 
     /**
