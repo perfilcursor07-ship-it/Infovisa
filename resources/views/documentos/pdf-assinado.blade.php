@@ -151,7 +151,7 @@
             padding: 0;
             border: none;
             min-height: 150px;
-            font-size: 10pt;
+            font-size: 12pt;
             line-height: 1.6;
         }
 

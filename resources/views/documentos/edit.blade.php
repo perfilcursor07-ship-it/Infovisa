@@ -632,7 +632,7 @@ function documentoEditor() {
                 content_style: `
                     body { 
                         font-family: Arial, sans-serif; 
-                        font-size: 10pt; 
+                        font-size: 12pt; 
                         line-height: 1.6; 
                         color: #000; 
                         padding: 15px;
