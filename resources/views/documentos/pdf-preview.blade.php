@@ -76,7 +76,7 @@
             border-collapse: collapse;
             table-layout: fixed;
             border: 1px solid #d0d0d0;
-            font-size: 8pt;
+            font-size: 12pt;
         }
 
         .cabecalho-table td {
