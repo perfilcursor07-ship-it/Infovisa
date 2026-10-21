@@ -123,7 +123,7 @@
             border-collapse: collapse;
             table-layout: fixed;
             border: 1px solid #d0d0d0;
-            font-size: 12pt;
+            font-size: 8pt;
         }
 
         .cabecalho-table td {
@@ -151,7 +151,7 @@
             padding: 0;
             border: none;
             min-height: 150px;
-            font-size: 12pt;
+            font-size: 8pt;
             line-height: 1.6;
         }
 
