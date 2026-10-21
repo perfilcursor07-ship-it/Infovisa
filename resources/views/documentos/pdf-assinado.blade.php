@@ -113,7 +113,7 @@
         }
         
         .info-grid {
-            font-size: 10pt;
+            font-size: 9pt;
             line-height: 1.5;
             color: #000;
         }
