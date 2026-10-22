@@ -1150,7 +1150,7 @@ function documentoEditor() {
                 content_style: `
                     body { 
                         font-family: Arial, sans-serif; 
-                        font-size: 12pt; 
+                        font-size: 10pt; 
                         line-height: 1.6; 
                         color: #000; 
                         padding: 15px;
