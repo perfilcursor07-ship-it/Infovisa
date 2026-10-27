@@ -27,6 +27,7 @@ composer install --no-dev --optimize-autoloader --ignore-platform-reqs
 php artisan migrate --force
 php artisan optimize:clear
 php artisan config:cache
+php artisan config:true
 npm run build
 
 # permissões só onde precisa
