@@ -1,5 +1,13 @@
 @extends('layouts.admin')
 
+@php
+    // Apenas administradores podem inserir atividades manualmente em estabelecimentos privados
+    $podeCnaeManualPrivado = auth('interno')->check() && auth('interno')->user()->isAdmin();
+    $rotaBuscaCnaeManual = $podeCnaeManualPrivado
+        ? route('admin.estabelecimentos.buscar-cnaes')
+        : route('admin.configuracoes.pactuacao.buscar-cnaes');
+@endphp
+
 @section('title', 'Cadastrar Pessoa Jurídica')
 @section('page-title', 'Cadastrar Pessoa Jurídica')
 
@@ -722,17 +730,21 @@
                             <span class="text-sm font-bold text-blue-600 bg-blue-100 px-3 py-1 rounded-full" x-text="atividadesExercidas.length"></span>
                         </div>
 
-                        {{-- Busca de CNAE Manual (Apenas Público) --}}
-                        <div x-show="dados.tipo_setor === 'publico'" class="mb-6 mt-6 bg-white border-2 border-dashed border-blue-300 rounded-lg p-5">
+                        {{-- Busca de CNAE Manual (Público para todos; Privado apenas para administradores) --}}
+                        <div x-show="dados.tipo_setor === 'publico' || (podeCnaeManualPrivado && dados.tipo_setor === 'privado')" x-cloak class="mb-6 mt-6 bg-white border-2 border-dashed border-blue-300 rounded-lg p-5">
                             <div class="flex items-center gap-2 mb-3">
                                 <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                                 </svg>
                                 <h4 class="text-base font-semibold text-blue-800">Adicionar Atividade Manualmente</h4>
+                                <span x-show="dados.tipo_setor === 'privado'" class="ml-auto px-2 py-1 bg-blue-600 text-white text-xs font-bold rounded-full">ADMINISTRADOR</span>
                             </div>
-                            <p class="text-sm text-gray-600 mb-4">
-                                Para estabelecimentos públicos (Prefeituras, Fundos Municipais) que não possuem os CNAEs de saúde vinculados ao CNPJ, 
+                            <p x-show="dados.tipo_setor === 'publico'" class="text-sm text-gray-600 mb-4">
+                                Para estabelecimentos públicos (Prefeituras, Fundos Municipais) que não possuem os CNAEs de saúde vinculados ao CNPJ,
                                 você pode buscar e adicionar manualmente a atividade correta aqui.
+                            </p>
+                            <p x-show="dados.tipo_setor === 'privado'" class="text-sm text-gray-600 mb-4">
+                                Busque CNAEs cadastrados na pactuação e adicione manualmente para este estabelecimento, caso a atividade exercida não conste no CNPJ da Receita Federal.
                             </p>
                             
                             <div class="flex gap-2">
@@ -1241,6 +1253,8 @@ function estabelecimentoForm() {
         cnaeErro: '',
         loadingCnae: false,
         cnaeResultados: [],
+        // Somente administradores podem inserir atividades manualmente em estabelecimentos privados
+        podeCnaeManualPrivado: {{ $podeCnaeManualPrivado ? 'true' : 'false' }},
 
         init() {
             // Watchers para verificar competência quando atividades mudarem
@@ -1287,10 +1301,15 @@ function estabelecimentoForm() {
                          }
                      }
                 } else {
-                    // Busca na nossa rota local por descrição
-                    const response = await fetch(`{{ route('admin.configuracoes.pactuacao.buscar-cnaes') }}?q=${encodeURIComponent(this.cnaeBusca)}`);
+                    // Busca na nossa rota local por descrição (CNAEs cadastrados na pactuação)
+                    const termo = encodeURIComponent(this.cnaeBusca);
+                    const response = await fetch(`{{ $rotaBuscaCnaeManual }}?q=${termo}&termo=${termo}`);
                     if (response.ok) {
                         this.cnaeResultados = await response.json();
+                    } else if (response.status === 403) {
+                        this.cnaeErro = 'Apenas administradores podem buscar por descrição. Informe o código CNAE de 7 dígitos.';
+                    } else {
+                        this.cnaeErro = 'Erro ao buscar CNAE';
                     }
                 }
 
@@ -1823,7 +1842,8 @@ function estabelecimentoForm() {
                         atividades.push({
                             codigo: cnae.codigo,
                             descricao: cnae.descricao || '',
-                            principal: false
+                            principal: false,
+                            manual: cnae.manual === true
                         });
                     }
                 });
