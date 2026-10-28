@@ -202,6 +202,7 @@ class TipoDocumentoController extends Controller
             'exige_itens_atendimento' => 'boolean',
             'abrir_processo_automaticamente' => 'boolean',
             'tipo_processo_codigo' => 'nullable|string|max:255',
+            'permite_documento_fisico' => 'boolean',
             'escopo_processos' => 'nullable|in:todos,especificos,nenhum',
             'tipos_processo_permitidos' => 'nullable|array',
             'tipos_processo_permitidos.*' => 'string|exists:tipo_processos,codigo',
@@ -231,6 +232,9 @@ class TipoDocumentoController extends Controller
         if (!$validated['abrir_processo_automaticamente']) {
             $validated['tipo_processo_codigo'] = null;
         }
+
+        // Disponível em "Criar Documento > Documento Físico" no estabelecimento
+        $validated['permite_documento_fisico'] = $request->has('permite_documento_fisico');
 
         // Gera código automaticamente se não fornecido
         if (empty($validated['codigo'])) {
@@ -284,6 +288,7 @@ class TipoDocumentoController extends Controller
             'exige_itens_atendimento' => 'boolean',
             'abrir_processo_automaticamente' => 'boolean',
             'tipo_processo_codigo' => 'nullable|string|max:255',
+            'permite_documento_fisico' => 'boolean',
             'escopo_processos' => 'nullable|in:todos,especificos,nenhum',
             'tipos_processo_permitidos' => 'nullable|array',
             'tipos_processo_permitidos.*' => 'string|exists:tipo_processos,codigo',
@@ -313,6 +318,9 @@ class TipoDocumentoController extends Controller
         if (!$validated['abrir_processo_automaticamente']) {
             $validated['tipo_processo_codigo'] = null;
         }
+
+        // Disponível em "Criar Documento > Documento Físico" no estabelecimento
+        $validated['permite_documento_fisico'] = $request->has('permite_documento_fisico');
 
         // Gera código automaticamente se não fornecido
         if (empty($validated['codigo'])) {

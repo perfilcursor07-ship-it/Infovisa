@@ -23,6 +23,7 @@ class TipoDocumento extends Model
         'tipo_prazo_analise',
         'abrir_processo_automaticamente',
         'tipo_processo_codigo',
+        'permite_documento_fisico',
         'escopo_processos',
         'tipos_processo_permitidos',
     ];
@@ -34,6 +35,7 @@ class TipoDocumento extends Model
         'permite_resposta' => 'boolean',
         'exige_itens_atendimento' => 'boolean',
         'abrir_processo_automaticamente' => 'boolean',
+        'permite_documento_fisico' => 'boolean',
         'tipos_processo_permitidos' => 'array',
         'prazo_padrao_dias' => 'integer',
         'prazo_analise_dias' => 'integer',
