@@ -325,9 +325,10 @@ class DocumentoDigitalController extends Controller
             ->visivelParaUsuario()
             ->orderBy('nome');
 
-        // Se vem do estabelecimento (sem processo), mostra apenas tipos com abertura automática de processo
+        // Se vem do estabelecimento (sem processo), mostra só os tipos marcados como documento físico
+        // em Configurações > Tipos de Documento
         if ($request->filled('estabelecimento_id') && !$request->filled('processo_id')) {
-            $tiposDocumentoQuery->where('abrir_processo_automaticamente', true);
+            $tiposDocumentoQuery->where('permite_documento_fisico', true);
         }
 
         $tiposDocumento = $tiposDocumentoQuery->get();
@@ -355,11 +356,20 @@ class DocumentoDigitalController extends Controller
             $pastasProcesso = $processo->pastas()->orderBy('ordem')->orderBy('nome')->get();
         }
 
+        // Um documento só fica ligado ao estabelecimento através do processo. Para os tipos que não
+        // abrem processo sozinhos, quem lança escolhe aqui a qual processo o documento pertence.
+        $processosEstabelecimento = collect();
+        if ($estabelecimento && !$processo) {
+            $processosEstabelecimento = $estabelecimento->processos()
+                ->orderByDesc('created_at')
+                ->get(['id', 'numero_processo', 'tipo', 'status']);
+        }
+
         // Verifica se pode marcar como sigiloso
         $niveisPermitidosSigiloso = json_decode(ConfiguracaoSistema::obter('niveis_permitidos_sigiloso', '["administrador","gestor_estadual","gestor_municipal"]'), true) ?? [];
         $podeMarcarSigiloso = $usuarioLogado->isAdmin() || in_array($usuarioLogado->nivel_acesso->value, $niveisPermitidosSigiloso);
 
-        return view('documentos.create-fisico', compact('tiposDocumento', 'estabelecimento', 'processo', 'pastasProcesso', 'podeMarcarSigiloso'));
+        return view('documentos.create-fisico', compact('tiposDocumento', 'estabelecimento', 'processo', 'pastasProcesso', 'processosEstabelecimento', 'podeMarcarSigiloso'));
     }
 
     /**
@@ -415,6 +425,16 @@ class DocumentoDigitalController extends Controller
                 }
             }
 
+            // O documento só aparece na tela do estabelecimento através do processo: sem processo
+            // ele ficaria órfão. Quem lança precisa escolher um, ou o tipo precisa abrir processo.
+            if (!$processo && $request->estabelecimento_id) {
+                throw ValidationException::withMessages([
+                    'processo_id' => 'Escolha o processo a que este documento pertence. '
+                        . 'Se o estabelecimento ainda não tem processo, abra um antes ou marque '
+                        . '"Abrir Processo Automaticamente" neste tipo de documento.',
+                ]);
+            }
+
             // Upload do PDF
             $arquivoPath = $request->file('arquivo_fisico_pdf')
                 ->store('documentos-fisicos/' . date('Y/m'), 'public');
@@ -451,7 +471,8 @@ class DocumentoDigitalController extends Controller
                 'finalizado_em' => now(),
                 'codigo_autenticidade' => DocumentoDigital::gerarCodigoAutenticidade(),
                 'prazo_dias' => $request->prazo_dias,
-                'tipo_prazo' => $request->tipo_prazo,
+                // A coluna não aceita nulo: tipo de documento sem prazo grava o padrão
+                'tipo_prazo' => $request->tipo_prazo ?? 'corridos',
                 'data_vencimento' => $dataVencimento,
                 'prazo_notificacao' => $tipoDocumento->prazo_notificacao ?? false,
                 // Inicia o prazo automaticamente já que o documento foi entregue
@@ -470,6 +491,10 @@ class DocumentoDigitalController extends Controller
                 ->route('admin.documentos.show', $documento->id)
                 ->with('success', 'Documento físico criado com sucesso!');
 
+        } catch (ValidationException $e) {
+            // Erro de preenchimento (ex.: falta escolher o processo): volta no campo, não como falha do sistema
+            DB::rollBack();
+            throw $e;
         } catch (\Exception $e) {
             DB::rollBack();
             \Log::error('Erro ao criar documento físico', [

@@ -42,7 +42,9 @@
           @submit="enviando = true">
         @csrf
         <input type="hidden" name="estabelecimento_id" value="{{ $estabelecimento->id ?? '' }}">
-        <input type="hidden" name="processo_id" value="{{ $processo->id ?? '' }}">
+        @if($processo ?? null)
+            <input type="hidden" name="processo_id" value="{{ $processo->id }}">
+        @endif
 
         {{-- Seção 1: Tipo de Documento --}}
         <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -59,12 +61,46 @@
                             class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm" required>
                         <option value="">Selecione o tipo de documento</option>
                         @foreach($tiposDocumento as $tipo)
-                            <option value="{{ $tipo->id }}" data-tem-prazo="{{ $tipo->tem_prazo ? '1' : '0' }}" data-prazo-padrao="{{ $tipo->prazo_padrao_dias }}">
+                            <option value="{{ $tipo->id }}" data-tem-prazo="{{ $tipo->tem_prazo ? '1' : '0' }}" data-prazo-padrao="{{ $tipo->prazo_padrao_dias }}"
+                                    data-abre-processo="{{ $tipo->abrir_processo_automaticamente && $tipo->tipo_processo_codigo ? '1' : '0' }}">
                                 {{ $tipo->nome }}
                             </option>
                         @endforeach
                     </select>
                 </div>
+
+                @if(($estabelecimento ?? null) && !($processo ?? null))
+                {{-- O documento se liga ao estabelecimento pelo processo. Os tipos que abrem processo
+                     sozinhos criam o seu; os demais precisam que o usuário escolha um. --}}
+                <div x-show="!tipoAbreProcesso" x-cloak>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                        Processo <span class="text-red-500">*</span>
+                    </label>
+                    @if(($processosEstabelecimento ?? collect())->isNotEmpty())
+                        <select name="processo_id" x-bind:required="!tipoAbreProcesso"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm">
+                            <option value="">Selecione o processo</option>
+                            @foreach(($processosEstabelecimento ?? collect()) as $p)
+                                <option value="{{ $p->id }}" {{ old('processo_id') == $p->id ? 'selected' : '' }}>
+                                    {{ $p->numero_processo }} — {{ $p->tipo }} ({{ $p->status }})
+                                </option>
+                            @endforeach
+                        </select>
+                        <p class="text-xs text-gray-500 mt-1">É o processo que liga o documento ao estabelecimento.</p>
+                    @else
+                        <div class="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+                            <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <span>
+                                Este estabelecimento ainda não tem processo, e este tipo de documento não abre um
+                                automaticamente. Abra um processo antes, ou marque "Abrir Processo Automaticamente"
+                                em Configurações &gt; Tipos de Documento.
+                            </span>
+                        </div>
+                    @endif
+                </div>
+                @endif
 
                 @if(isset($pastasProcesso) && $pastasProcesso->isNotEmpty())
                 <div>
@@ -219,6 +255,13 @@
 function documentoFisico() {
     return {
         tipoSelecionado: '',
+        // Tipo que abre processo sozinho não precisa que o usuário escolha um processo
+        get tipoAbreProcesso() {
+            const opcao = document.querySelector(
+                'select[name="tipo_documento_id"] option[value="' + this.tipoSelecionado + '"]'
+            );
+            return opcao?.dataset.abreProcesso === '1';
+        },
         arquivoSelecionado: '',
         dataEntrega: '',
         temPrazo: true,
