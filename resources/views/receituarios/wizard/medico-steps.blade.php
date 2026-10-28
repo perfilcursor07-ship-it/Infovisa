@@ -1034,7 +1034,10 @@ const abrirPdf = async (file) => {
     }
     return pdfs.get(file);
 };
-const renderizarPagina = async (pdf, n, largura) => {
+// Desenhar a página pode ser inviável: a cédula digital do CFM traz um fundo de segurança feito
+// com um "tiling pattern" de 1x1 ponto, que o pdf.js repete centenas de milhares de vezes e nunca
+// termina. Por isso o desenho tem prazo — sem ele, o assistente ficava travado para sempre.
+const renderizarPagina = async (pdf, n, largura, limiteMs = 20000) => {
     const pagina = await pdf.getPage(n);
     const base = pagina.getViewport({ scale: 1 });
     const viewport = pagina.getViewport({ scale: largura ? largura / base.width : 2 });
@@ -1044,8 +1047,100 @@ const renderizarPagina = async (pdf, n, largura) => {
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    await pagina.render({ canvasContext: ctx, viewport }).promise;
+    const tarefa = pagina.render({ canvasContext: ctx, viewport });
+    let relogio;
+    try {
+        await Promise.race([
+            tarefa.promise,
+            new Promise((_, falhar) => {
+                relogio = setTimeout(() => {
+                    tarefa.cancel();
+                    falhar(new Error('Demorou demais para desenhar a página do PDF'));
+                }, limiteMs);
+            }),
+        ]);
+    } finally {
+        clearTimeout(relogio);
+    }
     return canvas;
+};
+
+// Imagem do pdf.js (ImageBitmap ou matriz de pixels) desenhada num canvas.
+const imagemParaCanvas = (img) => {
+    const { width: w, height: h, kind, data, bitmap } = img || {};
+    if (!w || !h) return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, w, h);
+    if (bitmap) {
+        ctx.drawImage(bitmap, 0, 0);
+        return canvas;
+    }
+    if (!data) return null;
+    const saida = ctx.createImageData(w, h);
+    const px = saida.data;
+    if (kind === 3) {               // RGBA
+        px.set(data.subarray(0, w * h * 4));
+    } else if (kind === 2) {        // RGB
+        for (let i = 0, j = 0; i < w * h; i++) {
+            px[j++] = data[i * 3];
+            px[j++] = data[i * 3 + 1];
+            px[j++] = data[i * 3 + 2];
+            px[j++] = 255;
+        }
+    } else if (kind === 1) {        // 1 bit (preto e branco)
+        const bytesPorLinha = (w + 7) >> 3;
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                const v = ((data[y * bytesPorLinha + (x >> 3)] >> (7 - (x & 7))) & 1) ? 255 : 0;
+                const j = (y * w + x) * 4;
+                px[j] = px[j + 1] = px[j + 2] = v;
+                px[j + 3] = 255;
+            }
+        }
+    } else {
+        return null;
+    }
+    ctx.putImageData(saida, 0, 0);
+    return canvas;
+};
+
+// Imagens embutidas na página, no tamanho original em que estão no arquivo.
+// Melhor que desenhar a página: a carteira escaneada ou fotografada vem na resolução cheia
+// (1611x1017 na cédula do CFM, contra 593x917 da página inteira) e não depende do desenho,
+// que pode ser lento ou impossível. Brasões, QR code e ícones ficam de fora pelo tamanho.
+const imagensDaPagina = async (pdf, n, minimo = 600) => {
+    const pagina = await pdf.getPage(n);
+    const ops = await pagina.getOperatorList();
+    const nomes = [];
+    for (let i = 0; i < ops.fnArray.length; i++) {
+        if (ops.fnArray[i] !== window.pdfjsLib.OPS.paintImageXObject
+            && ops.fnArray[i] !== window.pdfjsLib.OPS.paintJpegXObject) continue;
+        const nome = ops.argsArray[i][0];
+        if (typeof nome === 'string' && !nomes.includes(nome)) nomes.push(nome);
+    }
+    const canvases = [];
+    for (const nome of nomes) {
+        const img = await new Promise((ok) => {
+            const relogio = setTimeout(() => ok(null), 8000);
+            try {
+                pagina.objs.get(nome, (valor) => { clearTimeout(relogio); ok(valor); });
+            } catch (e) {
+                clearTimeout(relogio);
+                ok(null);
+            }
+        });
+        const canvas = img && imagemParaCanvas(img);
+        if (canvas && Math.max(canvas.width, canvas.height) >= minimo) {
+            // Veio do arquivo no tamanho original: a largura mede a nitidez, como numa foto
+            canvas.resolucaoReal = true;
+            canvases.push(canvas);
+        }
+    }
+    return canvases;
 };
 
 // Corta as bordas brancas: o leitor de texto não acha nada quando a carteira
@@ -1107,25 +1202,56 @@ const ampliarParaOcr = (canvas, alvo = 1800) => {
 
 // Texto de um arquivo: PDF com texto é lido direto; PDF escaneado ou foto passa pelo OCR.
 // "qualidade" recebe a confiança do OCR (0–100) e a largura útil da imagem, para orientar o usuário.
+// Carteiras novas (cédula do CFM, por exemplo) são impressas sobre um fundo de segurança de
+// linhas finas coloridas. O OCR lê esse fundo como se fossem letras e se perde. O texto impresso
+// é bem mais escuro que o fundo, então manter só os pixels escuros limpa a imagem: na cédula do
+// CFM a confiança sobe de ~22 para ~75 e o número do CRM, que se perdia no meio do ruído, aparece.
+const realcarTexto = (canvas, limite = 100) => {
+    const saida = document.createElement('canvas');
+    saida.width = canvas.width;
+    saida.height = canvas.height;
+    const ctx = saida.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(canvas, 0, 0);
+    const imagem = ctx.getImageData(0, 0, saida.width, saida.height);
+    const px = imagem.data;
+    for (let i = 0; i < px.length; i += 4) {
+        const luz = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+        px[i] = px[i + 1] = px[i + 2] = luz < limite ? 0 : 255;
+    }
+    ctx.putImageData(imagem, 0, 0);
+    return saida;
+};
+
 const ocrFontes = async (fontes, aoProgredir = () => {}, qualidade = {}) => {
     await carregarScript(TESSERACT);
     let atual = 0;
+    // A segunda passada (imagem realçada) faria a barra voltar atrás: o progresso só avança
+    let maiorProgresso = 0;
+    const avancar = (p) => { maiorProgresso = Math.max(maiorProgresso, p); aoProgredir(maiorProgresso); };
     const worker = await window.Tesseract.createWorker('por', 1, {
         logger: (m) => {
-            if (m.status === 'recognizing text') aoProgredir(Math.round(((atual + m.progress) / fontes.length) * 100));
+            if (m.status === 'recognizing text') avancar(Math.round(((atual + m.progress) / fontes.length) * 100));
         },
     });
     try {
         const textos = [];
         for (; atual < fontes.length; atual++) {
             const recorte = await recortarMargens(fontes[atual]);
-            const { data } = await worker.recognize(ampliarParaOcr(recorte));
+            const ampliado = ampliarParaOcr(recorte);
+            let { data } = await worker.recognize(ampliado);
+            // Leitura ruim: pode ser o fundo de segurança atrapalhando. Tenta só com os pixels escuros
+            // e fica com a melhor das duas (em foto mal iluminada o realce piora, e aí vale a original).
+            if ((data.confidence || 0) < 65) {
+                const realcado = await worker.recognize(realcarTexto(ampliado));
+                if ((realcado.data.confidence || 0) > (data.confidence || 0)) data = realcado.data;
+            }
             textos.push(data.text || '');
             qualidade.ocr = true;
             qualidade.confianca = Math.min(qualidade.confianca ?? 100, Math.round(data.confidence || 0));
-            // Largura só diz algo sobre a resolução em FOTO (tamanho real do arquivo). Página de PDF é
-            // desenhada aqui na escala que escolhemos, então a largura do recorte não mede nitidez.
-            if (!(fontes[atual] instanceof HTMLCanvasElement)) {
+            // Largura só diz algo sobre a resolução quando vem do tamanho real do arquivo: foto, ou
+            // imagem tirada de dentro do PDF. Página de PDF é desenhada aqui na escala que escolhemos,
+            // então a largura do recorte não mede nitidez.
+            if (!(fontes[atual] instanceof HTMLCanvasElement) || fontes[atual].resolucaoReal) {
                 qualidade.largura = Math.min(qualidade.largura ?? Infinity, recorte.width);
             }
         }
@@ -1136,7 +1262,22 @@ const ocrFontes = async (fontes, aoProgredir = () => {}, qualidade = {}) => {
 };
 // Imagem com pouca nitidez: lida, mas com risco de a vigilância não conseguir conferir
 const qualidadeBaixa = (q) => !!q.ocr && ((q.confianca ?? 100) < 60 || (q.largura ?? Infinity) < 700);
-const lerTextoDoArquivo = async (file, aoProgredir, maxPaginas = 3, qualidade = {}) => {
+// A camada de texto do PDF já traz o essencial da carteira? (nº do conselho, CPF ou rótulo de nome)
+const carteiraTemDados = (t) => {
+    const n = normalizar(t);
+    return /\b(CRM|CRO|CRMV)\b[^0-9A-Z]{0,20}\d{2,7}\b/.test(n)
+        || /(?<!\d)\d{3}\.?\s?\d{3}\.?\s?\d{3}\s?-?\s?\d{2}(?!\d)/.test(n)
+        || /\bNOME\s*:/.test(n);
+};
+// O comprovante de endereço só se identifica pelo CEP / titular; sem CEP, vale ler a imagem
+const comprovanteTemDados = (t) => /(?<!\d)\d{5}-?\s?\d{3}(?!\d)/.test(t);
+
+// Texto de um PDF: a camada de texto só serve se trouxer algum dado de identificação.
+// A carteira digital do CFM, por exemplo, tem uma camada de texto só com os dizeres do documento
+// ("Carteira de Identidade Médica", aviso da assinatura digital ICP-Brasil) enquanto nome, CRM e
+// CPF estão na IMAGEM da cédula. Sem esta conferência, esse texto passava no teste de tamanho,
+// o OCR nunca rodava e o cadastro saía "não identificado" com o documento perfeitamente legível.
+const lerTextoDoArquivo = async (file, aoProgredir, maxPaginas = 3, qualidade = {}, temDados = () => true) => {
     if (file.type !== 'application/pdf') return ocrFontes([file], aoProgredir, qualidade);
     const pdf = await abrirPdf(file);
     const total = Math.min(pdf.numPages, maxPaginas);
@@ -1145,10 +1286,16 @@ const lerTextoDoArquivo = async (file, aoProgredir, maxPaginas = 3, qualidade = 
         const conteudo = await (await pdf.getPage(n)).getTextContent();
         texto += conteudo.items.map(i => i.str).join(' ') + '\n';
     }
-    if (texto.replace(/\s/g, '').length >= 15) return texto;
-    const paginas = [];
-    for (let n = 1; n <= total; n++) paginas.push(await renderizarPagina(pdf, n));
-    return ocrFontes(paginas, aoProgredir, qualidade);
+    if (texto.replace(/\s/g, '').length >= 15 && temDados(texto)) return texto;
+    const fontes = [];
+    for (let n = 1; n <= total; n++) {
+        // As imagens embutidas vêm na resolução original e dispensam o desenho da página;
+        // só quando não há nenhuma (PDF todo em vetor) é que a página precisa ser desenhada.
+        const imagens = await imagensDaPagina(pdf, n);
+        fontes.push(...(imagens.length ? imagens : [await renderizarPagina(pdf, n)]));
+    }
+    // A camada de texto continua valendo: junta com o que o OCR leu das imagens
+    return [texto.trim(), await ocrFontes(fontes, aoProgredir, qualidade)].filter(Boolean).join('\n');
 };
 const mesmoArquivo = (a, b) => !!(a && b && a.name === b.name && a.size === b.size && a.lastModified === b.lastModified);
 // Mesmo conteúdo (mesmo com outro nome): compara o hash SHA-256 dos arquivos
@@ -1158,7 +1305,17 @@ const hashArquivo = async (f) => {
     return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
 };
 const arquivosIguais = async (a, b) => !!(a && b && a.size === b.size && (mesmoArquivo(a, b) || await hashArquivo(a) === await hashArquivo(b)));
-const miniaturaPdf = async (file, n = 1) => (await recortarMargens(await renderizarPagina(await abrirPdf(file), n, 900))).toDataURL('image/jpeg', 0.85);
+const miniaturaPdf = async (file, n = 1) => {
+    const pdf = await abrirPdf(file);
+    try {
+        return (await recortarMargens(await renderizarPagina(pdf, n, 900, 12000))).toDataURL('image/jpeg', 0.85);
+    } catch (e) {
+        // Página que o pdf.js não consegue desenhar (ex.: cédula do CFM): mostra a maior imagem embutida
+        const imagens = await imagensDaPagina(pdf, n);
+        if (!imagens.length) throw e;
+        return imagens.reduce((a, b) => (a.width * a.height >= b.width * b.height ? a : b)).toDataURL('image/jpeg', 0.85);
+    }
+};
 const postarLeitura = async (url, texto) => {
     const fd = new FormData();
     fd.append('texto', texto);
@@ -1450,7 +1607,7 @@ function carteiraConselho(config) {
 
         // PDF com texto: lê direto. PDF escaneado ou foto: reconhecimento de texto (OCR).
         textoDoArquivo(file) {
-            return lerTextoDoArquivo(file, (p) => { this.progresso = p; }, 3, this.qualidade);
+            return lerTextoDoArquivo(file, (p) => { this.progresso = p; }, 3, this.qualidade, carteiraTemDados);
         },
 
         enviar(dados) {
@@ -1654,7 +1811,7 @@ function comprovanteEndereco(config) {
                 this.etapa = 1;
                 this.qualidade = {};
                 this.cienteIlegivel = false;
-                const texto = await lerTextoDoArquivo(this.arquivo, (p) => { this.progresso = p; }, 2, this.qualidade);
+                const texto = await lerTextoDoArquivo(this.arquivo, (p) => { this.progresso = p; }, 2, this.qualidade, comprovanteTemDados);
                 this.etapa = 2;
                 const resposta = await postarLeitura(config.url, texto);
                 if (resposta.success) {

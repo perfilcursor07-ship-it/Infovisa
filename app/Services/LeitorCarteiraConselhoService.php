@@ -133,6 +133,18 @@ class LeitorCarteiraConselhoService
             };
         }
 
+        // Cédula nova (CFM/CRO) impressa em duas colunas: os rótulos numa linha ("NOME   CRM/UF")
+        // e os valores na linha de baixo ("LUIS PIRES DE MELO FILHO   8912/TO"). O OCR às vezes
+        // troca a sigla do estado por números parecidos ("8912/10"); nesse caso vale o número,
+        // e a UF vem do nome do conselho ("Conselho Regional de Medicina - TO").
+        if ($dados['conselho'] && preg_match('/^[ \t]*([A-Z][A-Z ]{5,60}?)\s+(\d{2,7})\s*[\/|]\s*([A-Z0-9]{2})[ \t]*$/m', $t, $m)) {
+            $dados['nome'] ??= trim($m[1]);
+            $dados['numero'] ??= $m[2];
+            if (!$dados['uf'] && in_array($m[3], self::UFS, true)) {
+                $dados['uf'] = $m[3];
+            }
+        }
+
         // Número pela palavra "inscrição"/"registro"
         if (!$dados['numero'] && preg_match('/\b(?:INSCRICAO|REGISTRO|CRM|CRO|CRMV)\b[^0-9\n]{0,25}(\d{3,7})\b/', $t, $m)) {
             $dados['numero'] = $m[1];
@@ -146,6 +158,11 @@ class LeitorCarteiraConselhoService
                     break;
                 }
             }
+        }
+
+        // UF pela sigla no nome do conselho ("Conselho Regional de Medicina - TO")
+        if (!$dados['uf'] && preg_match("/CONSELHO REGIONAL DE [A-Z ]{4,30}?[-\s]+($ufs)\b/u", $t, $m)) {
+            $dados['uf'] = $m[1];
         }
 
         $dados['especialidade'] = $this->especialidadeNoTexto($t);
