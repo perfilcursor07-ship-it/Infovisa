@@ -234,6 +234,9 @@ falharão apontando a versão em uso. **Isso não é uma regressão** — é exa
 segurança pedida pelo ofício entrando em vigor. A falha desaparece assim que o PHP for atualizado
 para 8.3.36+.
 
+Ressalva importante, aprendida na prática: essa trava **não pode** valer em tempo de execução, sob
+pena de derrubar o sistema em produção. Ver a ressalva ao fim de 2.4.
+
 ### 2.4 Consequência imediata para o deploy em produção
 
 > **O deploy em produção falhará enquanto o PHP for 8.2.31.** Isto é consequência direta das
@@ -263,6 +266,50 @@ Isso declara ao Composer a versão a considerar na resolução, sem afrouxar a r
 — que continua documentando o que o ofício exige. A exceção deve ser registrada no chamado da ATI,
 com o changelog anexado, e **revertida** quando o servidor migrar para uma versão que satisfaça a
 regra pelo número.
+
+#### Atenção: `config.platform` sozinho não basta — a produção caiu por isso
+
+A exceção acima resolve a **resolução** de dependências, mas não o **runtime**. A partir da
+restrição do `require.php`, o Composer gera `vendor/composer/platform_check.php`, que é incluído
+pelo autoload em toda requisição e compara a versão **real** do PHP:
+
+```php
+if (!(PHP_VERSION_ID >= 80235)) {
+    $issues[] = 'Your Composer dependencies require a PHP version ">= 8.2.35". ...';
+}
+// ...
+throw new \RuntimeException('Composer detected issues in your platform: ' . implode(' ', $issues));
+```
+
+Com PHP 8.2.31 (`80231`) em produção, isso derrubou o sistema inteiro: HTTP 500 em toda requisição,
+com a mensagem `Composer detected issues in your platform: Your Composer dependencies require a PHP
+version ">= 8.2.35"`. O ambiente de desenvolvimento **não** reproduziu o problema, porque 8.3.14
+(`80314`) passa na comparação achatada `>= 80235` — o Composer reduz as três faixas da restrição ao
+menor limite inferior ao gerar esse arquivo.
+
+Por isso o `composer.json` também passou a declarar:
+
+```json
+"config": {
+    "platform-check": false
+}
+```
+
+Com isso o `platform_check.php` deixa de ser gerado e a aplicação volta a subir. A restrição do
+`require.php` permanece registrando o que o ofício exige e, junto do `config.platform`, continua
+governando a resolução de dependências — o que mantém de pé a proteção que de fato importa: não
+instalar dependências incompatíveis com a versão de PHP do servidor.
+
+Depois de aplicar, é preciso **regerar o autoload** no servidor, senão o arquivo antigo continua lá:
+
+```bash
+php composer.phar config platform-check false
+php composer.phar dump-autoload --optimize --no-dev
+php artisan optimize:clear
+```
+
+Essa exceção deve ser revertida junto da anterior quando o servidor passar a exibir uma versão que
+satisfaça a regra pelo número.
 
 ---
 
