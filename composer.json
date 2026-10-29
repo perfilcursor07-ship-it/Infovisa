@@ -79,7 +79,8 @@
         },
         "platform": {
             "php": "8.2.35"
-        }
+        },
+        "platform-check": false
     },
     "minimum-stability": "stable",
     "prefer-stable": true
