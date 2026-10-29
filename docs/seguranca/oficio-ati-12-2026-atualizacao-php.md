@@ -182,8 +182,26 @@ do PHP (ver checklist).
 
 **Antes**
 
-1. Registrar a versão atual para a resposta à ATI: `php -v` e `php-fpm -v` no servidor de produção.
-2. Listar as extensões hoje habilitadas: `php -m > /tmp/php-modules-antes.txt`.
+1. Registrar a versão atual para a resposta à ATI. O script
+   [`verificar-php-servidor.sh`](verificar-php-servidor.sh) deste mesmo diretório faz os passos 1, 2
+   e 3 de uma vez e gera o relatório a anexar ao chamado:
+
+   ```bash
+   bash verificar-php-servidor.sh                      # usa /var/www/html/infovisa
+   bash verificar-php-servidor.sh /outro/caminho       # se a aplicação estiver em outro lugar
+   ```
+
+   Ele **não altera nada** — só lê versões, diretivas e extensões — e pode rodar com o sistema no
+   ar. Rode com `sudo` para que ele consiga identificar o binário do PHP-FPM em execução.
+   Manualmente, o equivalente é `php -v` e `php-fpm -v`.
+
+   > **Atenção:** o que vale para o ofício é a versão do **PHP-FPM**, não a do CLI. Quando há mais de
+   > uma instalação de PHP no servidor as duas divergem, e é o FPM que atende as requisições. O
+   > script resolve isso lendo o binário do processo em execução
+   > (`readlink /proc/<pid-do-master>/exe`) em vez de confiar no `php` do `PATH`.
+
+2. Listar as extensões hoje habilitadas: `php -m > /tmp/php-modules-antes.txt`
+   (o script já grava esse arquivo e confere as extensões exigidas pelo InfoVisa uma a uma).
 3. Preservar as configurações de upload atualmente em uso pelo InfoVisa (hoje declaradas em
    `public/.htaccess`, mas que em PHP-FPM precisam estar no `php.ini`):
    `upload_max_filesize=64M`, `post_max_size=128M`, `max_execution_time=300`,
@@ -203,16 +221,19 @@ do PHP (ver checklist).
 **Depois**
 
 10. Confirmar a versão: `php -v` deve mostrar 8.3.36 ou superior.
-11. `composer install --no-dev --optimize-autoloader --ignore-platform-req="ext-*"` — agora deve
+11. Rodar `bash verificar-php-servidor.sh` novamente: a conclusão deve apontar
+    **nenhuma não conformidade**. Esse segundo relatório é a comprovação da regularização para o
+    chamado da ATI.
+12. `composer install --no-dev --optimize-autoloader --ignore-platform-req="ext-*"` — agora deve
     concluir **sem** erro de versão de PHP. Se acusar a versão, a atualização não surtiu efeito no
     binário usado pelo Composer.
-12. `php artisan optimize:clear` e, em seguida, `php artisan config:cache`.
-13. Validar os fluxos que dependem das extensões atualizadas: geração de PDF de receituário
+13. `php artisan optimize:clear` e, em seguida, `php artisan config:cache`.
+14. Validar os fluxos que dependem das extensões atualizadas: geração de PDF de receituário
     (dompdf/fpdi), leitura de PDF (`smalot/pdfparser`), exportação de planilhas
     (`maatwebsite/excel`/phpspreadsheet), QR Code (`endroid/qr-code`) e upload de imagens
     (`intervention/image`).
-14. Confirmar que a versão do PHP exposta em cabeçalhos HTTP está suprimida (`expose_php = Off`).
-15. Registrar a conclusão no chamado da ATI e anexar a saída de `php -v`.
+15. Confirmar que a versão do PHP exposta em cabeçalhos HTTP está suprimida (`expose_php = Off`).
+16. Registrar a conclusão no chamado da ATI e anexar o relatório do script e a saída de `php -v`.
 
 ---
 
