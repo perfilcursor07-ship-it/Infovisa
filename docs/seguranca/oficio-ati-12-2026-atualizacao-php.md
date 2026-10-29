@@ -99,7 +99,7 @@ versão de PHP:
 
 | Pacote | Restrição de PHP | Efeito |
 |---|---|---|
-| `phpoffice/phpspreadsheet` 1.30.2 | `>=7.4.0 <8.5.0` | **Impede PHP 8.5** |
+| `phpoffice/phpspreadsheet` 1.30.7 | `>=7.4.0 <8.5.0` | **Impede PHP 8.5** |
 | `nette/utils` | `8.2 - 8.5` | Compatível até 8.5 |
 | `nette/schema` | `8.1 - 8.5` | Compatível até 8.5 |
 | `dragonmantank/cron-expression` | `^8.2 \| ^8.3 \| ^8.4 \| ^8.5` | Compatível até 8.5 |
@@ -107,7 +107,7 @@ versão de PHP:
 | `laravel/framework` v11.48.0 | `^8.2` | Sem teto declarado |
 
 **Conclusão:** das quatro versões admitidas pelo ofício, o InfoVisa pode adotar hoje **8.2.35+,
-8.3.36+ ou 8.4.27+**. A opção **8.5.12 está bloqueada** por `phpoffice/phpspreadsheet` 1.30.2
+8.3.36+ ou 8.4.27+**. A opção **8.5.12 está bloqueada** por `phpoffice/phpspreadsheet` 1.30.7
 (dependência transitiva de `maatwebsite/excel`, usada na exportação de planilhas) — adotá-la exigiria
 antes atualizar essa biblioteca.
 
@@ -408,35 +408,163 @@ chamados **https://chamados.ati.to.gov.br**, referenciando o SGD **2026/26819/00
 
 ---
 
-## 6. Pendência relacionada, fora do escopo deste ofício
+## 6. Atualização das dependências com avisos de segurança
 
-O levantamento acima revelou, por meio de `composer audit`, **62 avisos de segurança afetando 15
-pacotes de produção** do `composer.lock`, incluindo severidade crítica:
+O levantamento feito para este ofício revelou, por meio de `composer audit`, **62 avisos de segurança
+afetando 15 pacotes de produção**, incluindo severidade crítica. Isso **não** faz parte do OFÍCIO
+Nº 12/2026, que trata especificamente da versão do PHP, mas foi tratado em trabalho separado logo
+depois, em 29/10/2026. Esta seção registra o resultado.
 
-| Pacote | Avisos | Severidades |
+### 6.1 Resultado
+
+| Momento | Avisos (produção) | Pacotes afetados |
 |---|---|---|
-| `league/commonmark` | 14 | 9 high, 5 medium |
-| `phpoffice/phpspreadsheet` | 12 | 2 **critical**, 7 high, 3 medium |
-| `guzzlehttp/guzzle` | 9 | 1 high, 8 medium |
-| `dompdf/dompdf` | 6 | 4 medium, 2 low |
-| `laravel/framework` | 5 | 1 **critical**, 1 high, 1 medium, 1 low |
-| `guzzlehttp/psr7` | 4 | 4 medium |
-| `symfony/http-foundation` | 2 | 1 high, 1 medium |
-| `symfony/mime` | 2 | 1 high, 1 medium |
-| `symfony/routing` | 2 | 2 medium |
-| `maatwebsite/excel` | 1 | 1 high |
-| `symfony/http-kernel` | 1 | 1 high |
-| `symfony/mailer` | 1 | 1 medium |
-| `setasign/fpdi` | 1 | 1 medium |
-| `league/flysystem` | 1 | 1 low |
-| `symfony/polyfill-intl-idn` | 1 | 1 low |
+| Antes | 62 | 15 |
+| Depois | **5** | **1** (`laravel/framework`) |
 
-Isso **não** faz parte do OFÍCIO Nº 12/2026, que trata especificamente da versão do PHP, e
-**nenhuma dessas dependências foi atualizada** neste trabalho — uma atualização de dependências
-altera comportamento da aplicação e exige janela e testes próprios. Fica registrado aqui como
-pendência de segurança a ser tratada em trabalho separado, com atenção especial a
-`phpoffice/phpspreadsheet` (cuja atualização também é o que destravaria a adoção do PHP 8.5) e a
-`laravel/framework`.
+Verificação: `composer audit --no-dev`.
+
+### 6.2 O que foi atualizado
+
+Todas as correções couberam **dentro das restrições já declaradas no `composer.json`** — nenhuma
+restrição de versão precisou ser elevada ou afrouxada, e nenhuma migração de major de biblioteca foi
+necessária.
+
+| Pacote | Antes | Depois | Avisos zerados |
+|---|---|---|---|
+| `league/commonmark` | 2.8.0 | 2.10.4 | 14 (9 high, 5 medium) |
+| `phpoffice/phpspreadsheet` | 1.30.2 | 1.30.7 | 12 (2 **critical**, 7 high, 3 medium) |
+| `guzzlehttp/guzzle` | 7.10.0 | 7.16.1 | 9 (1 high, 8 medium) |
+| `dompdf/dompdf` | v3.1.4 | v3.1.6 | 6 (4 medium, 2 low) |
+| `guzzlehttp/psr7` | 2.8.0 | 2.13.2 | 4 medium |
+| `symfony/http-foundation` | v7.4.5 | v7.4.22 | 2 (1 high, 1 medium) |
+| `symfony/mime` | v7.4.5 | v7.4.22 | 2 (1 high, 1 medium) |
+| `symfony/routing` | v7.4.4 | v7.4.22 | 2 medium |
+| `maatwebsite/excel` | 3.1.67 | 3.1.70 | 1 high |
+| `symfony/http-kernel` | v7.4.5 | v7.4.22 | 1 high |
+| `symfony/mailer` | v7.4.4 | v7.4.22 | 1 medium |
+| `setasign/fpdi` | v2.6.4 | v2.6.9 | 1 medium |
+| `league/flysystem` | 3.31.0 | 3.36.0 | 1 low |
+| `symfony/polyfill-intl-idn` | v1.33.0 | v1.43.0 | 1 low |
+
+São **57 avisos zerados** em 14 pacotes. No total, 46 entradas do `composer.lock` mudaram, contando as
+dependências transitivas arrastadas que não tinham aviso (`symfony/console`, `symfony/string`,
+`nette/*`, `masterminds/html5`, `sabberworm/php-css-parser`, polyfills, entre outras).
+
+Pontos que merecem registro:
+
+- **`phpoffice/phpspreadsheet` não exigiu troca de série.** A versão 1.30.7 zera todos os 12 avisos,
+  inclusive os 2 críticos (CVE-2026-45034 e CVE-2026-34084). A migração para 2.x/3.x/5.x — que muda a
+  API da biblioteca e era o risco previsto — **não foi necessária**.
+- **`thecodingmachine/safe` v3.3.0 saiu do lock.** Era dependência do `maatwebsite/excel` 3.1.67 e
+  deixou de ser exigida na 3.1.70. Não há nenhuma chamada a `Safe\` no código do InfoVisa.
+- **`maennchen/zipstream-php` recuou de 3.2.1 para 3.1.2**, por exigência de versão de PHP — ver 6.4.
+- Em desenvolvimento, `symfony/yaml` foi de v7.4.1 para v7.4.22, zerando outros 4 avisos que vinham
+  pelo `laravel/sail`. Com isso o `composer audit` completo (produção + desenvolvimento) também fica
+  em 5 avisos.
+
+### 6.3 Pendência: `laravel/framework` (5 avisos, 1 crítico)
+
+Os 5 avisos restantes são todos do `laravel/framework` e **não têm correção dentro da série 11**. A
+versão mais recente da série é a v11.57.1 e continua afetada por todos os cinco:
+
+| Aviso | Severidade | Corrigido em | Aplica-se ao InfoVisa? |
+|---|---|---|---|
+| CVE-2026-114509 — bypass de autenticação no `TokenGuard` com credencial de API não-string | **crítica** | >= 12.68.0 / >= 13.29.0 | **Não.** Os três guards de `config/auth.php` (`web`, `externo`, `interno`) usam driver `session`; nenhum usa driver `token` |
+| PKSA-3r5d-mb8f-1qw9 e CVE-2026-48019 — injeção de CRLF na regra de validação `email` | high | >= 12.60.0 / >= 13.10.0 | **Sim.** A regra `email` é usada em cadastro de usuário interno, recuperação de senha e cadastro de estabelecimento |
+| PKSA-m5cs-t1y6-qpcs — confusão de caminho em URL assinada temporária | medium | >= 12.61.1 / >= 13.12.0 | **Não.** O sistema não usa `signedRoute`, `temporarySignedRoute` nem o middleware `signed` |
+| CVE-2026-102279 — XSS na página de debug | low | >= 12.69.0 / >= 13.30.0 | **Só com `APP_DEBUG=true`.** O padrão de `config/app.php` é `false` |
+
+Eliminar esses avisos exige **migração de major do framework (Laravel 11 → 12 ou 13)**. Isso muda
+comportamento da aplicação, não é atualização de dependência e precisa de projeto próprio, com janela
+e testes. Fica registrado como pendência.
+
+Mitigações aplicáveis enquanto a migração não ocorrer:
+
+- manter `APP_DEBUG=false` em produção (cobre o aviso low);
+- não introduzir guard com driver `token` — para API, usar o Sanctum, já instalado (mantém o crítico
+  fora de alcance);
+- quanto ao CRLF na regra `email`: o caminho de envio de mensagem já está coberto, porque
+  `symfony/mime` v7.4.22 — atualizado neste ciclo — passou a rejeitar CRLF em
+  `Symfony\Component\Mime\Address` (CVE-2026-45067). O risco residual é o armazenamento de um endereço
+  malformado, não a injeção de cabeçalho no envio.
+
+### 6.4 Trava de resolução do Composer (`config.platform`)
+
+O `composer.json` fixa o alvo de resolução de dependências:
+
+```json
+"config": {
+    "platform": {
+        "php": "8.2.35"
+    }
+}
+```
+
+O motivo é que o PHP de desenvolvimento (8.3.14) é **mais novo** que o de produção (8.2.31, que será
+regularizado para 8.2.35 — seções 1.1 e 1.5). Sem essa trava, resolver dependências na máquina de
+desenvolvimento faz o Composer escolher pacotes que exigem PHP mais novo do que o do servidor. Isso
+aconteceu de fato durante este trabalho: na primeira tentativa, feita com `--ignore-platform-req=php`
+(necessário enquanto o PHP local não atende à restrição da seção 2.1), a resolução trouxe
+`symfony/string` 8.1.10 e `symfony/event-dispatcher` 8.1.5, que exigem **PHP >= 8.4.1** e quebrariam o
+deploy. Com a trava em 8.2.35, os dois ficaram em v7.4.22 e v7.4.17.
+
+Duas consequências registradas:
+
+- `maennchen/zipstream-php` 3.2.x exige `php-64bit ^8.3`; por isso o lock usa a **3.1.2**
+  (`php-64bit ^8.2`) em vez da 3.2.1 anterior. A 3.1.2 não tem avisos de segurança e a escrita e
+  leitura de `.xlsx` foram validadas nessa versão (6.5). Note-se que o lock anterior já exigia
+  PHP 8.3 por causa desse pacote, o que era incompatível com o servidor em 8.2.
+- Quando produção subir para a série 8.3 ou 8.4, basta elevar a trava para a versão correspondente e
+  reexecutar a resolução, para voltar a receber os pacotes que exigem PHP mais novo.
+
+A trava **não** mascara a checagem do ofício: `composer check-platform-reqs` continua acusando falha
+apenas na linha do `php` enquanto o PHP local for 8.3.14, como descrito em 2.3.
+
+### 6.5 Validação executada
+
+- `composer audit --no-dev`: 62 → 5 avisos, 15 → 1 pacote.
+- Compatibilidade do lock inteiro (produção e desenvolvimento) verificada contra PHP 8.2.35:
+  **nenhum pacote incompatível**.
+- `php artisan test --testsuite Unit`: **19 testes, 62 asserções, todos passando**.
+- `php artisan route:list`: 656 rotas carregadas. `config:cache` e `view:cache` concluídos sem erro —
+  exercita `symfony/routing`, `symfony/http-foundation` e a compilação de todas as views Blade.
+
+A suíte automatizada não cobre nenhuma das bibliotecas atualizadas, então os fluxos afetados foram
+exercitados por script, reproduzindo as chamadas reais do sistema. **15 verificações, todas OK:**
+
+| Fluxo do sistema | Biblioteca | O que foi exercitado |
+|---|---|---|
+| Geração de PDF (receituário, documento emitido) | `dompdf/dompdf` v3.1.6 | `Pdf::loadHTML` + `setPaper('a4','portrait')` + `setOption` + `output()`, PDF de 2 páginas |
+| Carimbo de validação sobre o PDF | `setasign/fpdi` v2.6.9 | `setSourceFile`, `importPage`, `getTemplateSize`, `AddPage`, `useTemplate`, `Rect`, `Line`, `Image`, `Cell`, `Output('F')`, como em `CarimboValidacaoService` |
+| QR Code de validação | `endroid/qr-code` 6.0.9 | `QrCode` + `PngWriter->getString()`, PNG embutido no carimbo |
+| Leitura de PDF | `smalot/pdfparser` v2.12.3 | `parseFile()->getText()` no PDF do dompdf e no PDF carimbado |
+| Exportação de planilha | `phpoffice/phpspreadsheet` 1.30.7 | escrita de `.xlsx` e releitura do conteúdo (round-trip) |
+| Leitura de `.pptx` (treinamentos) | `phpoffice/phppresentation` 1.2.0 | escrita e `IOFactory::load()` |
+| Integrações externas (CNPJ, WhatsApp, IA) | `guzzlehttp/guzzle` 7.16.1, `guzzlehttp/psr7` 2.13.2 | cliente Guzzle, `Request`/`Uri` PSR-7, `Http::` com JSON e com multipart |
+| Markdown de e-mail | `league/commonmark` 2.10.4 | `Str::markdown` |
+| Upload e processamento de imagem | `intervention/image` 3.11.6 | leitura de PNG e redimensionamento, via fachada e via `ImageManager` |
+| Armazenamento de arquivos | `league/flysystem` 3.36.0 | `Storage::put`, `get` e `delete` |
+
+Ressalva honesta: as chamadas de rede reais (API de CNPJ, WhatsApp, provedor de IA) **não** foram
+exercitadas contra os serviços externos — foram validadas a montagem da requisição e o tratamento da
+resposta, não a integração ponta a ponta.
+
+### 6.6 PHP 8.5 continua bloqueado — e o motivo pode ser removido
+
+`phpoffice/phpspreadsheet` 1.30.7 mantém a restrição `>=7.4.0 <8.5.0`. A conclusão da seção 1.3,
+portanto, não muda: das versões admitidas pelo ofício, o InfoVisa pode adotar **8.2.35+, 8.3.36+ ou
+8.4.27+**, e **8.5.12 segue inviável**.
+
+Achado relevante para quem for tratar isso: a fachada `Maatwebsite\Excel\Facades\Excel` é importada em
+`app/Http/Controllers/Admin/RelatorioController.php` mas **nunca é chamada**, e não há nenhuma
+referência a `PhpSpreadsheet` no código do InfoVisa. Todas as exportações do sistema são CSV, geradas
+com `fputcsv` e `response()->streamDownload`. Ou seja: o teto de PHP 8.5 vem de uma dependência que a
+aplicação não exercita. Há dois caminhos, ambos decisão de projeto e nenhum deles tomado aqui:
+
+1. migrar para `maatwebsite/excel` 4.x, que usa `phpspreadsheet` 5.x e não tem o teto de versão; ou
+2. **remover `maatwebsite/excel` do `composer.json`**, que elimina de uma vez o teto de PHP 8.5 e a
+   superfície de segurança desses dois pacotes — foram 13 dos 62 avisos deste ciclo, 2 deles críticos.
 
 ---
 
@@ -449,10 +577,11 @@ pendência de segurança a ser tratada em trabalho separado, com atenção espec
 | Origem do pacote em produção | AppStream do RHEL 9, module stream `php:8.2` |
 | Obstáculo principal | A Red Hat corrige por *backport* sem mudar o número da versão: o stream `php:8.2` provavelmente nunca exibirá 8.2.35. Ver seções 1.5 e 1.6 |
 | Decisão pendente | Caminho A (comprovar backport e pedir aceite por CVE), B (trocar o stream do RHEL) ou C (repositório Remi). Recomendado: **A** |
-| PHP 8.5.12 | Inviável — bloqueado por `phpoffice/phpspreadsheet` 1.30.2 |
+| PHP 8.5.12 | Inviável — bloqueado por `phpoffice/phpspreadsheet` 1.30.7 (ver 6.6, que mostra como o bloqueio pode ser removido) |
 | Ação no código versionado | **Concluída** — restrição de versão corrigida no Composer e checagem de versão reativada no deploy |
 | Ação no servidor | **Pendente** — checklist da seção 4 |
 | **Risco imediato** | **O próximo deploy falhará** enquanto o PHP for 8.2.31 (seção 2.4) |
 | Extensões em produção | Todas as 24 exigidas estão presentes — a atualização não depende de instalar extensão nova |
 | Testes após a alteração | 19 testes, 62 asserções, todos passando |
+| Avisos de segurança das dependências | **62 → 5** (de 15 pacotes para 1). Os 5 restantes são do `laravel/framework` e só têm correção no Laravel 12/13 — ver seção 6 |
 | Acesso externo | Manutenção justificada (seção 5); formalizar via chamados.ati.to.gov.br |
