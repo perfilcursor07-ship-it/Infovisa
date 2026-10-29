@@ -53,6 +53,11 @@ apenas apontar o WAMP para outra pasta já existente.
 > partir do repositório. Ela precisa ser confirmada pela equipe de infraestrutura com
 > `php -v` e `php-fpm -v` no servidor (ver checklist na seção 4) e registrada aqui antes do envio da
 > resposta formal à ATI.
+>
+> A detecção remota também não é possível: `https://sistemas.saude.to.gov.br/infovisa` responde
+> atrás de um proxy reverso (`Server: openresty`) que não expõe `X-Powered-By`, de modo que a versão
+> do PHP do backend não aparece nos cabeçalhos HTTP — o que, do ponto de vista de segurança, é o
+> comportamento correto e deve ser mantido. **A verificação tem de ser feita por acesso ao servidor.**
 
 ### 1.2 Onde a versão do PHP estava fixada no repositório
 
