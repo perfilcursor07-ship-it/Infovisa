@@ -23,7 +23,7 @@ git pull --ff-only origin main
 # se por algum motivo o .env mudar, restaura automaticamente
 cmp -s .env /tmp/infovisa.env.bak || cp /tmp/infovisa.env.bak .env
 
-composer install --no-dev --optimize-autoloader --ignore-platform-reqs
+composer install --no-dev --optimize-autoloader --ignore-platform-req="ext-*"
 php artisan migrate --force
 php artisan optimize:clear
 php artisan config:cache

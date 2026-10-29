@@ -27,7 +27,7 @@ fi
 
 # 5. Instalar dependências PHP
 echo "5. Instalando dependências PHP..."
-php composer.phar install --no-dev --optimize-autoloader --ignore-platform-reqs
+php composer.phar install --no-dev --optimize-autoloader --ignore-platform-req="ext-*"
 
 # 6. Rodar migrações
 echo "6. Executando migrações..."

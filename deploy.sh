@@ -40,7 +40,7 @@ else
 fi
 
 echo -e "${YELLOW}4. Instalando dependências do Composer...${NC}"
-php composer.phar install --no-dev --optimize-autoloader --ignore-platform-reqs
+php composer.phar install --no-dev --optimize-autoloader --ignore-platform-req="ext-*"
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✓ Dependências do Composer instaladas${NC}"
 else
