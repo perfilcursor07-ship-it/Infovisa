@@ -49,15 +49,28 @@ Builds de PHP disponíveis no WAMP local (`C:\wamp64\bin\php\`) e sua conformida
 Nenhum build corrigido está instalado no ambiente local — a atualização é obrigatória, não há como
 apenas apontar o WAMP para outra pasta já existente.
 
-> **Pendência de infraestrutura:** a versão do PHP do **servidor de produção** não é determinável a
-> partir do repositório. Ela precisa ser confirmada pela equipe de infraestrutura com
-> `php -v` e `php-fpm -v` no servidor (ver checklist na seção 4) e registrada aqui antes do envio da
-> resposta formal à ATI.
->
-> A detecção remota também não é possível: `https://sistemas.saude.to.gov.br/infovisa` responde
-> atrás de um proxy reverso (`Server: openresty`) que não expõe `X-Powered-By`, de modo que a versão
-> do PHP do backend não aparece nos cabeçalhos HTTP — o que, do ponto de vista de segurança, é o
-> comportamento correto e deve ser mantido. **A verificação tem de ser feita por acesso ao servidor.**
+Ambiente de **produção** (verificado em 29/10/2026 com
+[`verificar-php-servidor.sh`](verificar-php-servidor.sh), executado como root no servidor):
+
+| Item | Valor |
+|---|---|
+| Servidor | `sses482001.tocantins.governo` |
+| Sistema | Red Hat Enterprise Linux 9.8 (Plow), kernel 5.14.0-503.40.1.el9_5 |
+| **PHP (PHP-FPM, o que atende as requisições)** | **8.2.31** — binário `/usr/sbin/php-fpm`, master PID 3622405 |
+| PHP (CLI) | 8.2.31 — `/bin/php` (NTS). **Não divergem**, boa notícia |
+| Origem do pacote | AppStream do RHEL, módulo `php:8.2`, pacote `php-8.2.31-1.module+el9.8.0+24325+74f58d38` |
+| Serviços | `php-fpm` e `httpd` ambos *active/enabled* |
+| Configuração | `/etc/php.ini`, scan em `/etc/php.d` (`10-opcache.ini`), pool `/etc/php-fpm.d/www.conf` |
+| Extensões | 54 carregadas; **todas as 24 exigidas pelo InfoVisa presentes** |
+| OPcache / Xdebug | OPcache carregado e habilitado; Xdebug ausente (correto) |
+| `APP_ENV` / `APP_DEBUG` | `production` / `false` (corretos) |
+
+**PHP 8.2.31 — NÃO conforme.** A série 8.2 exige 8.2.35; faltam 4 versões de patch.
+
+> A detecção remota não é possível: `https://sistemas.saude.to.gov.br/infovisa` responde atrás de um
+> proxy reverso (`Server: openresty`) que não expõe `X-Powered-By`, de modo que a versão do PHP do
+> backend não aparece nos cabeçalhos HTTP — o que, do ponto de vista de segurança, é o comportamento
+> correto e deve ser mantido. A verificação foi feita por acesso direto ao servidor.
 
 ### 1.2 Onde a versão do PHP estava fixada no repositório
 
@@ -100,10 +113,77 @@ antes atualizar essa biblioteca.
 
 ### 1.4 Versão alvo escolhida
 
-**PHP 8.3.36** — é a correção da própria série já usada pelo projeto (8.3), o que mantém o risco de
-regressão no mínimo: nenhuma mudança de comportamento entre séries, apenas correções de segurança
-dentro da 8.3. A alternativa 8.4.27 é tecnicamente suportada pelas dependências e pode ser adotada
-em uma janela posterior, planejada à parte.
+**PHP 8.3.36** — é a correção da série que o ambiente de desenvolvimento já usa (8.3), com nenhuma
+mudança de comportamento entre séries, apenas correções de segurança. A alternativa 8.4.27 é
+tecnicamente suportada pelas dependências e pode ser adotada em uma janela posterior.
+
+Atenção: **produção está na série 8.2**, não na 8.3. Isso significa que regularizar o servidor
+envolve uma decisão que não é só de número de versão — ver 1.5.
+
+### 1.5 O obstáculo real: o PHP de produção vem do AppStream do RHEL
+
+Produção não usa um PHP compilado nem um repositório de terceiros: usa o **module stream `php:8.2`
+do AppStream do Red Hat Enterprise Linux 9**, pacote
+`php-8.2.31-1.module+el9.8.0+24325+74f58d38`. Isso tem duas consequências que decidem o caminho da
+regularização.
+
+**(a) Red Hat corrige sem mudar o número da versão.** A prática da Red Hat é aplicar as correções de
+segurança (*backport*) mantendo a versão upstream do pacote. Em outras palavras, o
+`php-8.2.31` do RHEL 9.8 pode **já conter** as correções que o upstream publicou no 8.2.35, e
+provavelmente o stream `php:8.2` nunca exibirá o número "8.2.35". Nesse cenário o servidor está
+tecnicamente protegido, mas **não atende à letra do ofício**, que cobra o número da versão.
+
+A evidência é o changelog do pacote, que cita os CVEs corrigidos:
+
+```bash
+rpm -q --changelog php | grep -oE 'CVE-[0-9]{4}-[0-9]+' | sort -u
+dnf -q module list php      # quais séries estão disponíveis (8.2, 8.3, 8.4...)
+dnf -q check-update 'php*'  # há atualização pendente no stream atual?
+```
+
+O script `verificar-php-servidor.sh` passou a coletar esses três itens (seções 5.2 a 5.4 do
+relatório).
+
+**(b) Mudar de série exige trocar o module stream, não um `dnf update`.** Ir de 8.2 para 8.3 ou 8.4
+é uma troca de stream:
+
+```bash
+sudo dnf module reset php
+sudo dnf module enable php:8.3     # se o stream existir no RHEL 9.8
+sudo dnf distro-sync
+```
+
+### 1.6 Os três caminhos possíveis
+
+| Caminho | O que dá | Custo / risco |
+|---|---|---|
+| **A. Comprovar o backport** e pedir à ATI o aceite pelo CVE, não pelo número | Mantém o suporte da Red Hat, sem mudança de versão; é a resposta tecnicamente correta para um parque RHEL | Depende do aceite da ATI. **Não** satisfaz a restrição do `composer.json` (ver 2.4) |
+| **B. Trocar o stream** para `php:8.3` ou `php:8.4` do próprio RHEL | Mantém o suporte da Red Hat e sobe de série | O stream do RHEL também pode exibir um número abaixo do exigido (ex.: 8.3.x < 8.3.36), recaindo no mesmo impasse do caminho A |
+| **C. Repositório Remi** para obter o upstream real (8.3.36+) | Satisfaz a **letra** do ofício | Sai do pacote suportado pela Red Hat; passa a depender de um repositório de terceiros para correções futuras |
+
+**Recomendação:** começar pelo **caminho A**, porque é o único que não altera a base de suporte do
+servidor e porque, se os CVEs do Alerta 93/2026 já estiverem corrigidos no pacote instalado, o risco
+de segurança real já está tratado — o que resta é formalizar. Rodar os três comandos de 1.5 é o que
+decide: se os CVEs do alerta aparecerem no changelog, protocole o caminho A; se não aparecerem, a
+regularização é obrigatória e segue para B (preferível) ou C.
+
+### 1.7 Outros achados de produção, decorrentes da mesma verificação
+
+Não fazem parte do ofício, mas foram revelados pela verificação e dois deles afetam o funcionamento
+do sistema hoje:
+
+| Achado | Valor em produção | Esperado / observação |
+|---|---|---|
+| `upload_max_filesize` | **2M** | O InfoVisa espera **64M**. Sob PHP-FPM as diretivas `php_value` do `public/.htaccess` **não se aplicam** — logo, envios acima de 2 MB falham hoje |
+| `post_max_size` | **8M** | Esperado 128M |
+| `memory_limit` | 128M | Esperado 512M |
+| `max_execution_time` | 0 (CLI) | Esperado 300 no pool FPM — confirmar em `www.conf`, pois os valores lidos são os do CLI |
+| `expose_php` | **On** | Deve ser `Off`. Hoje o proxy `openresty` mascara o cabeçalho, mas a origem não deveria anunciar a versão |
+| Composer | **ausente** no servidor e no `PATH` | `deploy.sh:43` e `fix-production-deploy.sh:30` executam `php composer.phar install` e **falhariam** |
+| `php artisan --version` | não respondeu | Investigar: `vendor/` incompleto, permissão ou erro de configuração |
+
+Os três primeiros devem ser corrigidos no `php.ini` / `www.conf` **na mesma janela** da atualização
+do PHP (passos 3 e 8 do checklist), já que o serviço será reiniciado de todo modo.
 
 ---
 
@@ -154,6 +234,36 @@ falharão apontando a versão em uso. **Isso não é uma regressão** — é exa
 segurança pedida pelo ofício entrando em vigor. A falha desaparece assim que o PHP for atualizado
 para 8.3.36+.
 
+### 2.4 Consequência imediata para o deploy em produção
+
+> **O deploy em produção falhará enquanto o PHP for 8.2.31.** Isto é consequência direta das
+> alterações 2.1 e 2.2 e precisa de decisão antes do próximo deploy.
+
+Produção roda 8.2.31, que **não** satisfaz `>=8.2.35`. Como `deploy.sh` deixou de ignorar os
+requisitos de plataforma (2.2), o passo de `composer install` será interrompido com o erro de versão.
+
+Isso é o comportamento pretendido — a trava existe justamente para impedir que o sistema seja
+implantado sobre um PHP vulnerável — mas implica que **a atualização do PHP passa a ser
+pré-requisito do próximo deploy**, e não uma tarefa paralela.
+
+Se for adotado o **caminho A** da seção 1.6 (manter o pacote do RHEL, com os CVEs corrigidos por
+backport mas exibindo 8.2.31), a restrição precisa de uma exceção documentada, porque o número da
+versão nunca satisfará a regra. Nesse caso, e **somente** se o changelog comprovar que os CVEs do
+Alerta 93/2026 estão corrigidos, acrescente ao `composer.json` a versão real da plataforma:
+
+```json
+"config": {
+    "platform": {
+        "php": "8.2.35"
+    }
+}
+```
+
+Isso declara ao Composer a versão a considerar na resolução, sem afrouxar a restrição `require.php`
+— que continua documentando o que o ofício exige. A exceção deve ser registrada no chamado da ATI,
+com o changelog anexado, e **revertida** quando o servidor migrar para uma versão que satisfaça a
+regra pelo número.
+
 ---
 
 ## 3. Verificações executadas
@@ -202,17 +312,26 @@ do PHP (ver checklist).
 
 2. Listar as extensões hoje habilitadas: `php -m > /tmp/php-modules-antes.txt`
    (o script já grava esse arquivo e confere as extensões exigidas pelo InfoVisa uma a uma).
-3. Preservar as configurações de upload atualmente em uso pelo InfoVisa (hoje declaradas em
-   `public/.htaccess`, mas que em PHP-FPM precisam estar no `php.ini`):
+3. Corrigir as diretivas de upload no `php.ini` / `/etc/php-fpm.d/www.conf`. Produção está hoje com
+   `upload_max_filesize=2M` e `post_max_size=8M`, e o InfoVisa espera
    `upload_max_filesize=64M`, `post_max_size=128M`, `max_execution_time=300`,
-   `max_input_time=300`, `memory_limit=512M`.
+   `max_input_time=300`, `memory_limit=512M`. Sob PHP-FPM as diretivas `php_value` do
+   `public/.htaccess` **não se aplicam** — ver seção 1.7.
 4. Backup do banco PostgreSQL e de `/var/www/html/infovisa/.env`.
 5. Executar em homologação antes da produção.
 
 **Atualização**
 
-6. Atualizar o PHP para **8.3.36** (ou superior da série 8.3), mantendo a série para evitar
-   regressão. Não adotar a série 8.5 — ver seção 1.3.
+6. **Decidir o caminho antes de executar** — ver seções 1.5 e 1.6. Produção está na série 8.2
+   (8.2.31), servida pelo module stream `php:8.2` do AppStream do RHEL 9, e a Red Hat corrige por
+   backport sem mudar o número da versão. Rode primeiro os três comandos de 1.5
+   (`rpm -q --changelog php`, `dnf -q module list php`, `dnf -q check-update 'php*'`):
+   - CVEs do Alerta 93/2026 já no changelog → **caminho A**: nenhuma atualização de versão é
+     necessária, protocole a comprovação na ATI e aplique a exceção da seção 2.4;
+   - não estão → **caminho B** (trocar o stream para `php:8.3`/`php:8.4` do próprio RHEL,
+     preferível) ou **caminho C** (repositório Remi, para obter 8.3.36 do upstream).
+
+   Em B e C, não adotar a série 8.5 — ver seção 1.3.
 7. Reinstalar/confirmar as extensões do passo 2, em especial `gd`, `zip`, `dom`, `openssl`,
    `iconv`, `fileinfo`, `simplexml`, `xmlreader`, `xmlwriter`, `zlib`, `mbstring`, `pdo_pgsql`.
 8. Reaplicar as diretivas do passo 3 no `php.ini` do PHP-FPM.
@@ -220,13 +339,18 @@ do PHP (ver checklist).
 
 **Depois**
 
-10. Confirmar a versão: `php -v` deve mostrar 8.3.36 ou superior.
-11. Rodar `bash verificar-php-servidor.sh` novamente: a conclusão deve apontar
-    **nenhuma não conformidade**. Esse segundo relatório é a comprovação da regularização para o
-    chamado da ATI.
-12. `composer install --no-dev --optimize-autoloader --ignore-platform-req="ext-*"` — agora deve
-    concluir **sem** erro de versão de PHP. Se acusar a versão, a atualização não surtiu efeito no
-    binário usado pelo Composer.
+10. Confirmar a versão com `php -v` **e** `php-fpm -v`. Nos caminhos B e C deve exibir uma versão
+    corrigida (8.3.36+ ou 8.4.27+); no caminho A continuará em 8.2.31, e a comprovação é o
+    changelog, não o número.
+11. Rodar `bash verificar-php-servidor.sh` novamente. Nos caminhos B e C a conclusão deve apontar
+    **nenhuma não conformidade**; esse segundo relatório é a comprovação da regularização para o
+    chamado da ATI. No caminho A o script continuará acusando a versão — é esperado, e o que se
+    anexa ao chamado é a seção 5.4 do relatório (CVEs corrigidos por backport).
+12. `composer install --no-dev --optimize-autoloader --ignore-platform-req="ext-*"` — deve concluir
+    **sem** erro de versão de PHP. Se acusar a versão: nos caminhos B e C a atualização não surtiu
+    efeito no binário usado pelo Composer; no caminho A falta aplicar a exceção da seção 2.4.
+    Lembre que o Composer **não está instalado** no servidor hoje (seção 1.7) — `deploy.sh` espera
+    um `composer.phar` no diretório da aplicação.
 13. `php artisan optimize:clear` e, em seguida, `php artisan config:cache`.
 14. Validar os fluxos que dependem das extensões atualizadas: geração de PDF de receituário
     (dompdf/fpdi), leitura de PDF (`smalot/pdfparser`), exportação de planilhas
@@ -320,11 +444,15 @@ pendência de segurança a ser tratada em trabalho separado, com atenção espec
 
 | Item | Situação |
 |---|---|
-| Versão do PHP identificada (desenvolvimento) | 8.3.14 — não conforme |
-| Versão do PHP em produção | **a confirmar pela infraestrutura** (passo 1 da seção 4) |
-| Versão alvo | 8.3.36 (série 8.3, mínimo risco de regressão) |
-| PHP 8.5.12 | Inviável hoje — bloqueado por `phpoffice/phpspreadsheet` 1.30.2 |
+| **Versão do PHP em produção** | **8.2.31** (PHP-FPM, `sses482001.tocantins.governo`, RHEL 9.8) — **não conforme**: a série 8.2 exige 8.2.35 |
+| Versão do PHP em desenvolvimento | 8.3.14 — não conforme (exige 8.3.36) |
+| Origem do pacote em produção | AppStream do RHEL 9, module stream `php:8.2` |
+| Obstáculo principal | A Red Hat corrige por *backport* sem mudar o número da versão: o stream `php:8.2` provavelmente nunca exibirá 8.2.35. Ver seções 1.5 e 1.6 |
+| Decisão pendente | Caminho A (comprovar backport e pedir aceite por CVE), B (trocar o stream do RHEL) ou C (repositório Remi). Recomendado: **A** |
+| PHP 8.5.12 | Inviável — bloqueado por `phpoffice/phpspreadsheet` 1.30.2 |
 | Ação no código versionado | **Concluída** — restrição de versão corrigida no Composer e checagem de versão reativada no deploy |
-| Ação no servidor | **Pendente** — checklist da seção 4, responsabilidade da infraestrutura |
+| Ação no servidor | **Pendente** — checklist da seção 4 |
+| **Risco imediato** | **O próximo deploy falhará** enquanto o PHP for 8.2.31 (seção 2.4) |
+| Extensões em produção | Todas as 24 exigidas estão presentes — a atualização não depende de instalar extensão nova |
 | Testes após a alteração | 19 testes, 62 asserções, todos passando |
 | Acesso externo | Manutenção justificada (seção 5); formalizar via chamados.ati.to.gov.br |

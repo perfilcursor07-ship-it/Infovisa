@@ -159,7 +159,13 @@ ENCONTRADOS="$(ls -1 /usr/bin/php* /usr/local/bin/php* /opt/remi/*/root/usr/bin/
 if [ -n "$ENCONTRADOS" ]; then
     printf '%s\n' "$ENCONTRADOS" | while IFS= read -r b; do
         [ -x "$b" ] || continue
-        printf '  %-45s %s\n' "$b" "$("$b" -v 2>/dev/null | head -n1 | awk '{print $2}')"
+        # Só interpreta a saída de quem realmente responde "PHP x.y.z"; o glob
+        # tambem pega phpize, php-config e afins, que nao tem -v de versao.
+        L="$("$b" -v 2>/dev/null | head -n1)"
+        case "$L" in
+            PHP\ [0-9]*) printf '  %-45s %s\n' "$b" "$(printf '%s' "$L" | awk '{print $2}')" ;;
+            *)           printf '  %-45s %s\n' "$b" "(nao e interpretador - ignorar)" ;;
+        esac
     done
 else
     info "(nenhuma instalacao alternativa localizada nos caminhos usuais)"
@@ -311,8 +317,40 @@ if command -v dnf >/dev/null 2>&1; then
     info "Gerenciador......: dnf"
     sub "5.1 Pacotes PHP instalados"
     rpm -qa 2>/dev/null | grep -iE '^php' | sort | sed 's/^/  /' | head -40 || info "(nenhum)"
-    sub "5.2 Modulo PHP ativo (AppStream)"
-    dnf module list --enabled php 2>/dev/null | sed 's/^/  /' | head -15 || info "(sem modulos)"
+    sub "5.2 Streams de modulo PHP disponiveis (AppStream)"
+    info "Em RHEL/Rocky/Alma o PHP vem de um 'module stream'. Trocar de serie"
+    info "(ex.: 8.2 -> 8.3) exige trocar o stream, nao basta 'dnf update'."
+    info "Marcadores: [e]nabled  [d]efault  [i]nstalled  [x]disabled"
+    dnf -q module list php 2>/dev/null | grep -vE '^(Updating|This system|Last metadata|^$)' | sed 's/^/  /' | head -20 || info "(sem modulos)"
+
+    sub "5.3 Atualizacoes de PHP pendentes nos repositorios"
+    PEND="$(dnf -q check-update 'php*' 2>/dev/null | grep -iE '^php' | sed 's/^/  /')"
+    if [ -n "$PEND" ]; then
+        alerta "Ha atualizacao de PHP pendente no stream atual - aplique-a:"
+        printf '%s\n' "$PEND"
+    else
+        info "Nenhuma atualizacao pendente no stream atualmente habilitado."
+        info "Se a versao acima esta abaixo do exigido, o stream atual NAO tem a"
+        info "correcao: e preciso trocar de stream (5.2) ou usar outro repositorio."
+    fi
+
+    sub "5.4 CVEs ja corrigidos pela distribuicao (backports)"
+    info "IMPORTANTE: Red Hat e derivados aplicam correcoes de seguranca SEM"
+    info "mudar o numero da versao. Um PHP 8.2.31 do RHEL pode ja conter as"
+    info "correcoes que o upstream publicou no 8.2.35. Nesse caso o sistema esta"
+    info "protegido, mas NAO atende a letra do oficio, que cobra o numero da"
+    info "versao. A lista abaixo e a evidencia a anexar ao chamado da ATI."
+    CVES="$(rpm -q --changelog php 2>/dev/null | grep -oE 'CVE-[0-9]{4}-[0-9]+' | sort -u | tr '\n' ' ')"
+    if [ -n "$CVES" ]; then
+        info ""
+        info "CVEs citados no changelog do pacote php instalado:"
+        printf '%s\n' "$CVES" | fold -s -w 68 | sed 's/^/    /'
+        info ""
+        info "Changelog mais recente (confira a data da ultima correcao):"
+        rpm -q --changelog php 2>/dev/null | head -12 | sed 's/^/    /'
+    else
+        info "(nenhum CVE citado no changelog, ou rpm indisponivel)"
+    fi
 elif command -v yum >/dev/null 2>&1; then
     info "Gerenciador......: yum"
     rpm -qa 2>/dev/null | grep -iE '^php' | sort | sed 's/^/  /' | head -40
